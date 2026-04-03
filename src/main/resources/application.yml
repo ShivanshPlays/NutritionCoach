@@ -1,0 +1,110 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# application.yml -- NutritionCoach configuration
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# MERN/Next.js analogy:
+#   This file is the combined equivalent of:
+#     .env              <- environment variables (api keys, db urls)
+#     next.config.js    <- framework-level configuration
+#     config/*.ts       <- app-level settings modules
+#
+#   Spring Boot reads this file at startup and makes every property available
+#   via @Value("${some.property}") injection or auto-configuration bindings.
+#   The ${GEMINI_API_KEY} syntax is exactly like process.env.GEMINI_API_KEY in Node.
+#
+#   Spring profiles (application-prod.yml, application-dev.yml) are equivalent
+#   to Next.js's .env.production / .env.development files.
+#
+# Book ref: Chapter 2 -- Choosing a Provider & Model
+#   The model name is externalised here so you can swap models without
+#   touching source code -- a key practice recommended in the book.
+# ═══════════════════════════════════════════════════════════════════════════
+
+spring:
+  application:
+    name: nutrition-coach
+
+  # ── Spring AI – Gemini via Google AI Studio OpenAI-compatible endpoint ──
+  # Spring AI 1.0.0 has no native Google AI Studio starter, but Google AI
+  # Studio exposes an OpenAI-compatible API -- we simply point the OpenAI
+  # client at it.  No GCP project required; just a Google AI Studio key.
+  #
+  # MERN/Next.js analogy:
+  #   This is equivalent to:
+  #     const openai = createOpenAI({
+  #       apiKey: process.env.GEMINI_API_KEY,
+  #       baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  #     })
+  #
+  # Book ref: Chapter 2 -- Choosing a Provider & Model
+  ai:
+    openai:
+      api-key: ${GEMINI_API_KEY}             # export GEMINI_API_KEY=<your key>
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
+      chat:
+        options:
+          model: gemini-2.0-flash            # cheap & fast; override per tier in Phase 7
+          temperature: 0.7
+
+  # ── Database – H2 in-memory for Phase 0-3 ────────────────────────────────
+  #
+  # MERN analogy: like using an in-memory MongoDB mock (mongodb-memory-server)
+  # for local development before connecting to a real Atlas cluster.
+  # H2 is a pure-Java embedded SQL database, zero config needed.
+  # Switch to PostgreSQL in Phase 10 by changing the url + driver below.
+  datasource:
+    url: jdbc:h2:mem:nutritioncoach;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+
+  h2:
+    console:
+      enabled: true            # browse at http://localhost:8080/h2-console
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      # create-drop = Hibernate creates tables from @Entity classes on startup
+      # and drops them on shutdown. Works fine until Flyway takes over in Phase 4.
+      # MERN analogy: like Mongoose auto-creating collections from schemas.
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false        # best practice: avoids lazy-loading traps in web layer
+
+  # ── Flyway – disabled until Phase 4 adds real DB migrations ──────────────
+  # MERN analogy: like Prisma migrations (prisma migrate dev).
+  # Flyway runs versioned SQL scripts in src/main/resources/db/migration/.
+  flyway:
+    enabled: false
+
+# ── Actuator ─────────────────────────────────────────────────────────────
+# MERN analogy: like a built-in /healthz endpoint that also exposes metrics.
+# Spring Boot Actuator provides /actuator/health, /actuator/metrics, etc.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# ── App-level config (grows per phase) ────────────────────────────────────
+# MERN analogy: a config module (config/ai.ts) that is imported by services.
+# These values are injected via @Value or @ConfigurationProperties in Phase 7+.
+app:
+  agent:
+    model:
+      free: gemini-2.0-flash          # Book ref: Ch 8 -- dynamic agent model selection
+      premium: gemini-1.5-pro
+    memory:
+      window-size: 8                  # Book ref: Ch 7 -- short-term memory window
+  guardrail:
+    enabled: false                    # Book ref: Ch 9 -- enable in Phase 6
+
+# ── Logging ───────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.nutritioncoach: DEBUG
+    org.springframework.ai: DEBUG     # shows full prompt/response in dev

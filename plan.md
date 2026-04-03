@@ -70,40 +70,45 @@ NutritionCoach/
 
 ## Build Phases
 
-### Phase 0 — Project Bootstrap
+### Phase 0 — Project Bootstrap ✅
 *Goal: running Spring Boot app that calls Gemini and returns text.*
 
-- [ ] Initialise Maven project with Java 21 and Spring Boot 3.x parent
-- [ ] Add dependencies:
+> **Note:** Spring AI 1.0.0 has no native Google AI Studio starter.
+> We use `spring-ai-starter-model-openai` pointed at Google AI Studio's
+> OpenAI-compatible endpoint (`generativelanguage.googleapis.com/v1beta/openai`).
+> The `ChatClient` API is identical — just set `GEMINI_API_KEY`.
+
+- [x] Initialise Maven project with Java 21 and Spring Boot 3.4.4
+- [x] Add dependencies:
   - `spring-boot-starter-web`
-  - `spring-ai-google-gemini-spring-boot-starter`
+  - `spring-ai-starter-model-openai` (BOM-managed; pointed at Google AI Studio)
   - `spring-boot-starter-data-jpa`
-  - `com.h2database:h2` (runtime, scope = test/dev)
-  - `org.flywaydb:flyway-core`
+  - `com.h2database:h2` (runtime)
+  - `org.flywaydb:flyway-core` (disabled until Phase 4)
   - `spring-boot-starter-validation`
   - `spring-boot-starter-actuator`
   - `lombok` (optional)
-  - `embabel-agent` (Embabel core + Spring integration)
-- [ ] Set Gemini API key in `application.yml` via env var `GEMINI_API_KEY`
-- [ ] Create `GET /api/health` → `{ "status": "ok" }`
-- [ ] Create `POST /api/chat` body `{ "message": "..." }` → raw Gemini text reply
-- [ ] Smoke-test locally
+  - Embabel commented out (Phase 2)
+- [x] Set Gemini API key in `application.yml` via env var `GEMINI_API_KEY`
+- [x] Create `GET /api/health` → `{ "status": "ok" }`
+- [x] Create `POST /api/chat` body `{ "message": "..." }` → raw Gemini text reply
+- [x] `mvn test` passes — context loads, H2 console available
 
-**Deliverable:** One working endpoint, one working Gemini round-trip.
+**Deliverable:** `BUILD SUCCESS`, one working Gemini round-trip. ✅
 
 ---
 
-### Phase 1 — Prompting Foundation
+### Phase 1 — Prompting Foundation ✅
 *Goal: move from raw text to structured, templated prompts.*
 
-- [ ] Add versioned prompt templates in `src/main/resources/prompts/`
-  - `research-system.st` — system prompt for research tasks
-  - `coach-system.st` — system prompt for coaching tasks
-- [ ] Add a `POST /api/research-summary` endpoint
+- [x] Add versioned prompt templates in `src/main/resources/prompts/`
+  - `research-system.st` — system prompt with output schema instructions
+  - `coach-system.st` — coaching system prompt with output schema instructions
+- [x] Add `POST /api/research-summary` endpoint
   - Input: `{ "topic": "..." }`
-  - Output: plain-text summary
-  - Use `ChatClient` with system prompt + templated user message
-- [ ] Introduce structured output — `ResearchBrief` record:
+  - Output: typed `ResearchBrief` JSON
+  - Uses `ChatClient` with system prompt loaded from classpath template + `{topic}` param
+- [x] Structured output — `ResearchBrief` record:
   ```java
   record ResearchBrief(
       String topic,
@@ -112,10 +117,10 @@ NutritionCoach/
       List<String> nextQuestions
   ) {}
   ```
-  Use `ChatClient.prompt(...).call().entity(ResearchBrief.class)`
-- [ ] Add few-shot examples to the research prompt template
+  Uses `ChatClient.prompt(...).call().entity(ResearchBrief.class)`
+- [x] System prompts include explicit JSON format instructions (no markdown fences)
 
-**Deliverable:** `POST /api/research-summary` returning a typed `ResearchBrief` JSON.
+**Deliverable:** `POST /api/research-summary` returns a typed `ResearchBrief` JSON. ✅
 
 ---
 
@@ -414,13 +419,14 @@ org.projectlombok:lombok
 
 ```yaml
 spring:
+  # Spring AI 1.0.0 — use Google AI Studio's OpenAI-compatible endpoint
   ai:
-    google:
-      gemini:
-        api-key: ${GEMINI_API_KEY}
-        chat:
-          options:
-            model: gemini-1.5-flash        # start cheap; override per tier
+    openai:
+      api-key: ${GEMINI_API_KEY}
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
+      chat:
+        options:
+          model: gemini-2.0-flash          # start cheap; override per tier
   datasource:
     url: jdbc:h2:mem:nutritioncoach        # swap to postgres in prod
     driver-class-name: org.h2.Driver

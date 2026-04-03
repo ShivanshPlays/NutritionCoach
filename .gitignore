@@ -1,0 +1,34 @@
+# Maven build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Environment variables – never commit real keys
+.env
+.env.local
+application-local.yml
+application-local.yaml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Spring Boot devtools restart trigger
+.spring-boot-devtools.properties
+
+# H2 file-mode databases (if you switch from in-memory to file-based)
+*.db
+*.mv.db
+*.trace.db
