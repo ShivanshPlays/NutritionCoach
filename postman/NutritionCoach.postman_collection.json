@@ -1,0 +1,409 @@
+{
+  "info": {
+    "_postman_id": "nc-collection-v1-001",
+    "name": "NutritionCoach API",
+    "description": "# NutritionCoach API Test Suite\n\nCovers all REST endpoints exposed by the Spring Boot backend.\n\n**How to use:**\n1. Import `NutritionCoach.postman_environment.json` first.\n2. Select the `NutritionCoach - Local` environment in the top-right dropdown.\n3. Make sure the Spring Boot server is running on port 8080.\n4. Run the full collection via *Collection Runner* or hit requests individually.\n\n**Maintenance rule (see copilot-instructions.md):**\nEvery time a new endpoint is added or an existing one changes its request/response\nshape, this collection AND the environment must be updated in the same PR/commit.\n\n**MERN analogy:**\nThis is the equivalent of a `.rest` file or `supertest` integration tests in a\nNext.js / Express project — but usable without writing code.\n\n**Book ref: Chapter 27 — Evaluations Overview**\nEvals start with basic I/O contract tests (does the endpoint return the right shape?)\nbefore moving on to LLM-output quality evaluation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 - Health & Infra",
+      "description": "Liveness probes and infrastructure checks. Run these first to confirm the server is up before executing any AI requests.",
+      "item": [
+        {
+          "name": "GET /api/health (app liveness)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            },
+            "description": "Custom liveness probe built in ChatController.\n\nMERN analogy: `router.get('/health', (req, res) => res.json({ status: 'ok' }))`\n\nExpected: 200 { \"status\": \"ok\" }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Body has status: ok', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/health",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "health"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n    \"status\": \"ok\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /actuator/health (Spring Boot health)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Spring Boot Actuator health endpoint. Reports status of all auto-configured health indicators (DB, disk, etc.).\n\nMERN analogy: like a /health endpoint in an Express app that pings the DB.\n\nExpected: 200 { \"status\": \"UP\" }"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Spring Boot reports status UP', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 UP",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/actuator/health",
+                  "host": ["{{base_url}}"],
+                  "path": ["actuator", "health"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n    \"status\": \"UP\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /actuator (links)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator",
+              "host": ["{{base_url}}"],
+              "path": ["actuator"]
+            },
+            "description": "Lists all exposed Actuator endpoints.\n\nExpected: 200 with a _links map containing at least 'health', 'info', 'self'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has _links', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('_links');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Chat (POST /api/chat)",
+      "description": "Free-text chat with the Gemini nutrition coach.\n\nMERN analogy: POST /api/chat route in an Express or Next.js App Router project.\n\nRequest:  { \"message\": string }   — @NotBlank validated\nResponse: { \"reply\": string }     — raw Gemini text\n\nBook ref: Chapter 2 — first end-to-end LLM round-trip.",
+      "item": [
+        {
+          "name": "POST /api/chat — happy path",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"message\": \"What are the best foods for muscle recovery after a workout?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat"]
+            },
+            "description": "Sends a nutrition question to Gemini via Spring AI ChatClient.\n\nThe system prompt is hardcoded in ChatController (Phase 0).\nIn later phases this will be loaded from a versioned .st template."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains reply field', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('reply');",
+                  "    pm.expect(json.reply).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "// Save reply for potential chaining in later requests",
+                  "const json = pm.response.json();",
+                  "if (json.reply) {",
+                  "    pm.environment.set('last_chat_reply', json.reply);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK — example reply",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"message\": \"What are the best foods for muscle recovery after a workout?\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/chat",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "chat"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n    \"reply\": \"Great question! After a workout, focus on protein for muscle repair (chicken, eggs, Greek yogurt) and carbohydrates to replenish glycogen (sweet potato, rice, fruit). Aim to eat within 30–60 minutes post-workout.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/chat — blank message (400 validation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"message\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": ["{{base_url}}"],
+              "path": ["api", "chat"]
+            },
+            "description": "Sends a blank message — should trigger @NotBlank Bean Validation.\n\nMERN analogy: like sending an empty string to a Zod z.string().min(1) field.\n\nExpected: 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 (validation error)', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Research Summary (POST /api/research-summary)",
+      "description": "Structured output endpoint — returns a ResearchBrief JSON object instead of free text.\n\nMERN analogy: like Vercel AI SDK generateObject() + Zod schema.\nSpring AI calls .entity(ResearchBrief.class) which auto-generates a JSON schema,\nappends it to the prompt, and deserialises the model's JSON response.\n\nRequest:  { \"topic\": string }   — @NotBlank validated\nResponse: ResearchBrief { topic, keyFindings[], risks[], nextQuestions[] }\n\nBook ref: Chapter 5 — Structured Output.",
+      "item": [
+        {
+          "name": "POST /api/research-summary — happy path",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"topic\": \"vitamin D and immune function\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/research-summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "research-summary"]
+            },
+            "description": "Requests a structured ResearchBrief for a given nutrition topic.\n\nThe model is guided by the versioned system prompt in prompts/research-system.st\nand forced to return JSON matching the ResearchBrief schema."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has all ResearchBrief fields', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('topic');",
+                  "    pm.expect(json).to.have.property('keyFindings');",
+                  "    pm.expect(json).to.have.property('risks');",
+                  "    pm.expect(json).to.have.property('nextQuestions');",
+                  "});",
+                  "",
+                  "pm.test('keyFindings is a non-empty array', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.keyFindings).to.be.an('array').and.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('risks is an array', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.risks).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('nextQuestions is an array', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.nextQuestions).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Save researched topic for potential chaining",
+                  "const json = pm.response.json();",
+                  "if (json.topic) {",
+                  "    pm.environment.set('last_research_topic', json.topic);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 OK — example ResearchBrief",
+              "originalRequest": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"topic\": \"vitamin D and immune function\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/research-summary",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "research-summary"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n    \"topic\": \"vitamin D and immune function\",\n    \"keyFindings\": [\n        \"Vitamin D receptors are present on nearly all immune cells\",\n        \"Deficiency is associated with increased susceptibility to respiratory infections\",\n        \"Supplementation may reduce severity of autoimmune conditions\"\n    ],\n    \"risks\": [\n        \"Toxicity possible with excessive supplementation (>4000 IU/day long-term)\",\n        \"Interactions with certain medications (thiazide diuretics, steroids)\"\n    ],\n    \"nextQuestions\": [\n        \"What blood level of 25-OH vitamin D is considered optimal for immune health?\",\n        \"Does sunlight exposure provide sufficient vitamin D at northern latitudes?\"\n    ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/research-summary — blank topic (400 validation)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"topic\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/research-summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "research-summary"]
+            },
+            "description": "Sends a blank topic — should trigger @NotBlank Bean Validation.\n\nExpected: 400 Bad Request."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 (validation error)', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

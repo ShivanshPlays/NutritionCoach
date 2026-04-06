@@ -60,6 +60,41 @@ mirrors the book's conceptual progression.
 Follow the Implementation Discipline principle: only add what is needed for the
 current phase.  No premature abstractions, no speculative features.
 
+### 7 — Maintain the Postman test suite in sync
+The collection and environment live in `postman/`:
+- `postman/NutritionCoach.postman_collection.json`
+- `postman/NutritionCoach.postman_environment.json`
+
+**Every time you add or change an endpoint, you MUST also:**
+
+1. **Add / update the request** in the collection under the correct numbered folder
+   (`01 - Health & Infra`, `02 - Chat`, `03 - Research Summary`, etc.).
+   Follow the existing item structure: `name`, `request`, `event[test script]`, `response[example]`.
+
+2. **Add pm.test() assertions** covering at minimum:
+   - Correct HTTP status code
+   - Required fields present in the response body
+   - Field types (array vs string, etc.)
+
+3. **Update the environment** (`NutritionCoach.postman_environment.json`) if the
+   change introduces new variables that should be seeded or captured between requests.
+
+4. **Add a saved example response** on happy-path requests so the collection
+   documents the expected shape even when offline.
+
+5. **Naming convention:**
+   - Folder: `NN - Feature Name`  (e.g., `04 - Memory`, `05 - Agent`)
+   - Request: `METHOD /path/to/endpoint — description`  (e.g., `POST /api/chat — happy path`)
+
+**MERN analogy for the Postman suite:**
+Think of it as the `.rest` file (VS Code REST Client) or `supertest` suite in a
+Next.js / Express project — it documents the API contract and lets you manually
+verify every endpoint without writing Java code.
+
+**Book ref: Chapter 27 — Evaluations Overview**
+The Postman suite is the "I/O contract" layer of evals: confirm the endpoint
+returns the right shape before measuring LLM output quality.
+
 ---
 
 ## Project stack at a glance

@@ -7,6 +7,7 @@ target/
 .env.local
 application-local.yml
 application-local.yaml
+application.yml
 
 # IDE
 .idea/
