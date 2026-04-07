@@ -33,17 +33,24 @@ spring:
   #   This is equivalent to:
   #     const openai = createOpenAI({
   #       apiKey: process.env.GEMINI_API_KEY,
-  #       baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  #       baseURL: 'https://generativelanguage.googleapis.com/v1beta/models',
   #     })
   #
   # Book ref: Chapter 2 -- Choosing a Provider & Model
   ai:
     openai:
-      api-key: ${GEMINI_API_KEY}             # export GEMINI_API_KEY=<your key>
+      api-key: ${GEMINI_API_KEY}     # export GEMINI_API_KEY=<your Google AI Studio key>
+      # Google AI Studio exposes an OpenAI-compatible endpoint under /v1beta/openai.
+      # Spring AI's OpenAI client appends its default completionsPath (/v1/chat/completions)
+      # to base-url, which would produce .../openai/v1/chat/completions -- a 404.
+      # We override completions-path to /chat/completions so the final URL is correct:
+      #   https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+      # MERN analogy: like setting baseURL on the Vercel AI SDK createOpenAI() call.
       base-url: https://generativelanguage.googleapis.com/v1beta/openai
       chat:
+        completions-path: /chat/completions   # strips the default /v1 prefix
         options:
-          model: gemini-2.0-flash            # cheap & fast; override per tier in Phase 7
+          model: gemini-2.5-flash            # confirmed working; swap back to 2.0-flash if quota resets
           temperature: 0.7
 
   # ── Database – H2 in-memory for Phase 0-3 ────────────────────────────────
@@ -77,6 +84,27 @@ spring:
   # Flyway runs versioned SQL scripts in src/main/resources/db/migration/.
   flyway:
     enabled: false
+
+# ── Embabel Agent Platform ───────────────────────────────────────────────
+# MERN analogy: equivalent of `new Mastra({ agents: [...] })` configuration.
+# Embabel auto-discovers @Agent beans from the classpath; these settings
+# control which LLM is used as the default for all @Action method calls.
+#
+# embabel.models.default-llm must match the model name registered by
+# embabel-agent-starter-openai.  That starter reads Spring AI's OpenAI
+# configuration and registers an Embabel Llm bean named after the model.
+# Since spring.ai.openai.chat.options.model = gemini-2.5-flash above, the
+# Llm bean's name is gemini-2.5-flash -- so we reference it here.
+#
+# Book ref: Chapter 2 -- Choosing a Provider & Model
+#   Externalising the model name means you can swap models without touching
+#   any Java code -- a key practice recommended in the book.
+embabel:
+  models:
+    default-llm: gemini-2.5-flash    # must match a GeminiModels constant name
+  agent:
+    logging:
+      personality: none              # disable Star Wars logging theme in dev
 
 # ── Actuator ─────────────────────────────────────────────────────────────
 # MERN analogy: like a built-in /healthz endpoint that also exposes metrics.

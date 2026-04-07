@@ -124,17 +124,33 @@ NutritionCoach/
 
 ---
 
-### Phase 2 — First Embabel Agent
+### Phase 2 — First Embabel Agent ✅
 *Goal: replace ad-hoc controller logic with a proper `@Agent`.*
 
-- [ ] Add Embabel Spring Boot auto-configuration
-- [ ] Create `ResearchAgent` annotated with `@Agent`
-  - Define an `@Action` for `gatherFacts(topic)` → `ResearchBrief`
-  - Define goal: produce a `ResearchBrief` for a given topic
-- [ ] Wire `ResearchAgent` into `ResearchController`
-- [ ] Write unit test for `ResearchAgent` using Embabel's test utilities (mocked LLM)
+- [x] Add Embabel Spring Boot auto-configuration
+  - `com.embabel.agent:embabel-agent-starter:0.3.4` (core platform)
+  - `com.embabel.agent:embabel-agent-starter-gemini:0.3.4` (registers Gemini model beans)
+  - `com.embabel.agent:embabel-agent-test:0.3.4` (FakeOperationContext for unit tests)
+  - Spring AI bumped from 1.0.0 → 1.1.1 (required by Embabel 0.3.4)
+- [x] Create `ResearchAgent` annotated with `@Agent`
+  - Single `@Action` + `@AchievesGoal` method: `gatherFacts(UserInput, Ai) → ResearchBrief`
+  - Uses `ai.withDefaultLlm().createObject(prompt, ResearchBrief.class)` for structured output
+- [x] Wire `ResearchAgent` into `ResearchController`
+  - Controller now injects `AgentPlatform` (Embabel runtime)
+  - Uses `AgentInvocation.create(platform, ResearchBrief.class).invoke(new UserInput(topic))`
+  - Agent auto-selected by goal type (no explicit agent name needed)
+- [x] Write unit test for `ResearchAgent` using Embabel's test utilities (mocked LLM)
+  - `ResearchAgentTest` uses `FakeOperationContext.create()` + `FakePromptRunner`
+  - Verifies topic appears in outgoing prompt; verifies exactly 1 LLM call made
+  - No Spring context, no real API key, < 1s execution
 
-**Deliverable:** First Embabel-managed agent replacing direct `ChatClient` calls.
+**Deliverable:** First Embabel-managed agent replacing direct `ChatClient` calls. ✅
+**Design notes:**
+- Embabel requires Spring AI 1.1.1 (not 1.0.0); upgraded to maintain compatibility.
+- `embabel-agent-starter-gemini` registers `gemini-2.5-flash` as a proper Embabel Llm bean.
+  `embabel-agent-starter-openai` registers GPT model names which Gemini rejects — use Gemini.
+- `spring-ai-starter-model-openai` (OpenAI compat endpoint) kept for `ChatController`.
+  Two LLM paths coexist: ChatController → OpenAI compat → Gemini; ResearchAgent → Gemini native.
 
 ---
 

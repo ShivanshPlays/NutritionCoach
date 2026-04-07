@@ -20,7 +20,11 @@
 
     <properties>
         <java.version>21</java.version>
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <!-- Embabel 0.3.4 was built against Spring AI 1.1.1; upgrading from 1.0.0 -->
+        <spring-ai.version>1.1.1</spring-ai.version>
+        <!-- Embabel: JVM agent framework, equivalent of Mastra on Node.js -->
+        <!-- Book ref: Chapter 4 - Agents 101                               -->
+        <embabel-agent.version>0.3.4</embabel-agent.version>
     </properties>
 
     <!-- ─────────────────────────────────────────────────────────────── -->
@@ -88,14 +92,34 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- ── Embabel – uncomment when starting Phase 2 ───────────── -->
-        <!--
+        <!-- ── Embabel – Agent platform (Phase 2+) ────────────────────────── -->
+        <!--                                                                    -->
+        <!-- MERN/Next.js analogy: equivalent of adding 'mastra' +             -->
+        <!--   '@mastra/core' to package.json.                                 -->
+        <!-- Mastra Agent class  →  Embabel @Agent class                       -->
+        <!-- Mastra createTool() →  Spring @Component registered as @Action    -->
+        <!-- Book ref: Chapter 4 - Agents 101                                  -->
+        <!--                                                                    -->
+        <!-- embabel-agent-starter: the core platform (auto-discovers @Agent   -->
+        <!--   beans, builds GOAP plans, runs actions).                        -->
         <dependency>
-            <groupId>com.embabel</groupId>
-            <artifactId>embabel-agent-spring-boot-starter</artifactId>
-            <version>0.1.0</version>
+            <groupId>com.embabel.agent</groupId>
+            <artifactId>embabel-agent-starter</artifactId>
+            <version>${embabel-agent.version}</version>
         </dependency>
-        -->
+
+        <!-- embabel-agent-starter-gemini: registers Embabel Llm beans from      -->
+        <!--   Google GenAI (Gemini) models.  This uses Spring AI's Google GenAI  -->
+        <!--   client rather than the OpenAI-compatible endpoint, giving Embabel  -->
+        <!--   proper Gemini model names (gemini-2.5-flash, etc.) while           -->
+        <!--   ChatController continues using spring-ai-starter-model-openai.     -->
+        <dependency>
+            <groupId>com.embabel.agent</groupId>
+            <artifactId>embabel-agent-starter-gemini</artifactId>
+            <version>${embabel-agent.version}</version>
+        </dependency>
+
+
 
         <!-- ── Spring Security – uncomment when starting Phase 6 ───── -->
         <!--
@@ -128,7 +152,16 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-
+        <!-- embabel-agent-test: provides FakeOperationContext + FakePromptRunner -->
+        <!-- for unit-testing @Action methods without real LLM calls.            -->
+        <!-- MERN analogy: like jest-mock + ai-sdk stubs for Mastra agents.      -->
+        <!-- Book ref: Chapter 27 - Evaluations Overview                         -->
+        <dependency>
+            <groupId>com.embabel.agent</groupId>
+            <artifactId>embabel-agent-test</artifactId>
+            <version>${embabel-agent.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

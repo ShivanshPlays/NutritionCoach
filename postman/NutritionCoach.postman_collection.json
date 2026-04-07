@@ -268,7 +268,7 @@
     },
     {
       "name": "03 - Research Summary (POST /api/research-summary)",
-      "description": "Structured output endpoint — returns a ResearchBrief JSON object instead of free text.\n\nMERN analogy: like Vercel AI SDK generateObject() + Zod schema.\nSpring AI calls .entity(ResearchBrief.class) which auto-generates a JSON schema,\nappends it to the prompt, and deserialises the model's JSON response.\n\nRequest:  { \"topic\": string }   — @NotBlank validated\nResponse: ResearchBrief { topic, keyFindings[], risks[], nextQuestions[] }\n\nBook ref: Chapter 5 — Structured Output.",
+      "description": "Structured output endpoint — returns a ResearchBrief JSON object instead of free text.\n\nPhase 1 implementation: ChatClient called directly.\nPhase 2 implementation (current): Backed by Embabel @Agent (ResearchAgent).\n  AgentPlatform auto-selects ResearchAgent via goal type (ResearchBrief),\n  then GOAP planner runs gatherFacts(@Action) → ResearchBrief (@AchievesGoal).\n\nMERN analogy: mastra.getAgent('researchAgent').generate({ topic }).\n\nRequest:  { \"topic\": string }   — @NotBlank validated\nResponse: ResearchBrief { topic, keyFindings[], risks[], nextQuestions[] }\n\nBook ref: Chapter 4 — Agents 101 (Embabel focused invocation).\nBook ref: Chapter 5 — Structured Output (createObject instead of entity).",
       "item": [
         {
           "name": "POST /api/research-summary — happy path",
