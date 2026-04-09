@@ -1,0 +1,202 @@
+package com.nutritioncoach.agent;
+
+import com.embabel.agent.api.annotation.AchievesGoal;
+import com.embabel.agent.api.annotation.Action;
+import com.embabel.agent.api.annotation.Agent;
+import com.embabel.agent.api.common.Ai;
+import com.embabel.agent.domain.io.UserInput;
+import com.nutritioncoach.model.CoachAdvice;
+import com.nutritioncoach.tool.MemoryTool;
+import com.nutritioncoach.tool.NutritionCalcTool;
+import com.nutritioncoach.tool.WebSearchTool;
+
+import java.util.List;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Phase 3: CoachAgent — personalised coaching advice backed by tools
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * What's new compared to ResearchAgent (Phase 2):
+ *   Phase 2 — ResearchAgent had no tools; it only called the LLM.
+ *   Phase 3 — CoachAgent pre-fetches context from THREE tools (web search,
+ *              nutrition calc, memory) before calling the LLM. This enriches
+ *              the prompt with grounding data and reduces hallucination.
+ *
+ * Tool-calling pattern used (pre-fetch / deterministic):
+ *   The JAVA CODE decides which tools to call and in what order, then
+ *   passes results into the LLM prompt.  This is different from "LLM-
+ *   directed tool calling" where the model outputs a tool-call JSON and
+ *   the framework executes it.
+ *
+ *   Pre-fetch pros:  fully testable, no extra round-trips, deterministic
+ *   Pre-fetch cons:  agent always calls every tool even if irrelevant
+ *
+ *   LLM-directed tool calling (added in Phase 7/Dynamic Agents) would use
+ *   Spring AI's function-calling mechanism to let Gemini decide which tools
+ *   to invoke.  For Phase 3 the pre-fetch pattern is simpler and sufficient.
+ *
+ * MERN/Next.js analogy (Mastra with tools):
+ *   // Mastra (Node.js):
+ *   export const coachAgent = new Agent({
+ *     name: 'CoachAgent',
+ *     instructions: `You are a personalised nutrition coach...`,
+ *     model: google('gemini-2.5-flash'),
+ *     tools: { webSearch, nutritionCalc, memory },  ← tools listed here
+ *   });
+ *   // The agent.generate() call lets the LLM decide to call those tools.
+ *
+ *   // Embabel (Java) — pre-fetch variant (Phase 3):
+ *   @Agent class CoachAgent {
+ *     // Tools injected via Spring DI (constructor injection)
+ *     @Action
+ *     public CoachAdvice advise(UserInput input, Ai ai) {
+ *       String ctx = webSearch.searchWeb(topic);  // ← Java calls the tool
+ *       return ai.withDefaultLlm().createObject(prompt + ctx, CoachAdvice.class);
+ *     }
+ *   }
+ *
+ * Spring DI on an @Agent class:
+ *   @Agent is meta-annotated with @Component, so Spring discovers it as a
+ *   bean and can inject other @Component beans (our tools) via the
+ *   constructor.  No 'new' keyword, no manual lookup needed.
+ *   MERN analogy: importing services in a Next.js route handler.
+ *
+ * Tool injection benefits vs Phase 2:
+ *   By injecting WebSearchTool, NutritionCalcTool, and MemoryTool:
+ *     1. Each tool is independently tested and swappable (interface segregation)
+ *     2. Tests for CoachAgent can use real tool instances (fast, deterministic)
+ *     3. Phase 10 (RAG) can replace WebSearchTool in one place without
+ *        changing CoachAgent's public API
+ *   MERN analogy: injecting a database client or API service into a handler
+ *   vs calling it inline.
+ *
+ * Book ref: Chapter 6 — Tool Calling
+ *   "Agents need tools to act on the world. A well-designed tool is:
+ *    • Narrow: one thing done well
+ *    • Idempotent/read-only where possible
+ *    • Easily testable in isolation"
+ *
+ * Book ref: Chapter 10 — Third-Party Tools & Integrations
+ *   WebSearchTool wraps an external capability (web search) behind a clean
+ *   interface.  Phase 3 uses a stub; Phase 10 swaps in a real search API.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+@Agent(description = "Generate personalised nutrition coaching advice for a given topic, using web search, nutrition data, and memory tools")
+public class CoachAgent {
+
+    // ── Stable internal user key for single-user Phase 3 ──────────────────
+    // In Phase 4 this will be replaced by the real userId from the request.
+    // MERN analogy: a hardcoded 'userId: "default"' before auth is wired up.
+    static final String DEFAULT_USER_ID = "default";
+
+    // ── Tool dependencies — injected by Spring DI ─────────────────────────
+    // @Agent is meta-annotated with @Component → Spring wires these via ctor.
+    // MERN analogy: const { webSearch, nutritionCalc, memory } = dependencies
+    private final WebSearchTool webSearchTool;
+    private final NutritionCalcTool nutritionCalcTool;
+    private final MemoryTool memoryTool;
+
+    public CoachAgent(WebSearchTool webSearchTool,
+                      NutritionCalcTool nutritionCalcTool,
+                      MemoryTool memoryTool) {
+        this.webSearchTool = webSearchTool;
+        this.nutritionCalcTool = nutritionCalcTool;
+        this.memoryTool = memoryTool;
+    }
+
+    /**
+     * Collect context from tools, then ask the LLM to synthesise personalised advice.
+     *
+     * Tool-calling sequence (pre-fetch pattern):
+     *   1. searchWeb   → supplementary research snippets (read-only)
+     *   2. calcNutrition → macro facts for foods mentioned in the topic (read-only)
+     *   3. lookupNotes → previous coaching notes for this user (read-only)
+     *   4. Construct enriched prompt and call LLM → CoachAdvice
+     *   5. storeMemory  → record that this topic was coached (mutating — last)
+     *
+     * Ordering note: mutating tool calls (storeMemory) happen after the LLM call
+     * so that a failure during LLM generation does not leave stale notes.
+     * This mirrors the "write last" principle in safe agentic design.
+     *
+     * MERN analogy: the `execute` block of a Mastra tool-using agent action.
+     *
+     * Book ref: Chapter 6 — Tool Calling
+     *   Sequencing tools before the LLM call is the "augmented context"
+     *   pattern: gather facts deterministically, then synthesise with the LLM.
+     *
+     * @param userInput the user's nutrition question / topic
+     * @param ai        Embabel's LLM gateway (injected by the platform)
+     * @return structured CoachAdvice
+     */
+    @AchievesGoal(description = "Produce personalised CoachAdvice for the given nutrition topic")
+    @Action
+    public CoachAdvice advise(UserInput userInput, Ai ai) {
+        String topic = userInput.getContent();
+
+        // ── Step 1: gather supplementary web context (read-only) ──────────
+        String webContext = webSearchTool.searchWeb(topic);
+
+        // ── Step 2: calculate macro facts (read-only) ─────────────────────
+        // Use "standard serving" as default quantity; Phase 5 can parse
+        // explicit quantities from structured input.
+        String nutritionData = nutritionCalcTool.calculateNutrition(topic, "standard serving");
+
+        // ── Step 3: retrieve existing notes for personalisation (read-only) ─
+        List<String> previousNotes = memoryTool.lookupNotes(DEFAULT_USER_ID, topic);
+        String notesContext = previousNotes.isEmpty()
+                ? "No previous notes for this user on this topic."
+                : "Previous coaching notes:\n" + String.join("\n- ", previousNotes);
+
+        // ── Step 4: call the LLM with enriched prompt ─────────────────────
+        //
+        // The prompt follows the "seed crystal" pattern from the book:
+        //   • Role definition (WHO the model should be)
+        //   • Grounding data (WHAT facts to use)
+        //   • Constraints (HOW to structure the response)
+        //   • Anti-hallucination instruction ("base advice on provided data")
+        //
+        // Book ref: Chapter 3 — Writing Great Prompts
+        //   Multi-section prompts with labelled data blocks reduce hallucination
+        //   because the model has clear anchors to reference.
+        //
+        // MERN analogy: the `prompt` string passed to Vercel AI SDK generateObject().
+        CoachAdvice advice = ai
+                .withDefaultLlm()
+                .createObject("""
+                        You are a warm, knowledgeable, and personalised nutrition coach.
+                        Your task is to synthesise the provided research data into
+                        actionable, evidence-based coaching advice tailored to the user's topic.
+
+                        ── USER TOPIC ────────────────────────────────────────────────────
+                        %s
+
+                        ── WEB SEARCH CONTEXT ────────────────────────────────────────────
+                        %s
+
+                        ── NUTRITION CALCULATION DATA ────────────────────────────────────
+                        %s
+
+                        ── USER HISTORY ──────────────────────────────────────────────────
+                        %s
+
+                        ── INSTRUCTIONS ──────────────────────────────────────────────────
+                        Base your advice strictly on the data provided above. Do not invent
+                        studies, statistics, or product claims not mentioned in the context.
+
+                        Your response must include:
+                        - summary:     2–3 sentence plain-language overview of key insights
+                        - actionItems: 3–5 concrete, measurable steps the user can take
+                                       starting this week (e.g. "Eat 150 g salmon 3× per week")
+                        - weeklyGoal:  a single measurable target for the next 7 days
+                        - disclaimer:  a brief safety reminder that this is not medical advice
+                        """.formatted(topic, webContext, nutritionData, notesContext),
+                        CoachAdvice.class);
+
+        // ── Step 5: store this coaching session in memory (mutating — done last) ─
+        // MERN analogy: await db.notes.insert({ userId, content }) after the LLM call.
+        memoryTool.storeMemory(DEFAULT_USER_ID, "Coached on: " + topic);
+
+        return advice;
+    }
+}

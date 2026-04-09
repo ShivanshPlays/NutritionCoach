@@ -154,7 +154,7 @@ NutritionCoach/
 
 ---
 
-### Phase 3 — Tool Calling
+### Phase 3 — Tool Calling ✅
 *Goal: give the agent real capabilities via Spring-bean tools.*
 
 Tools to implement (in order of priority):
@@ -166,14 +166,19 @@ Tools to implement (in order of priority):
 | `MemoryTool` | `lookupNotes(userId, query)` | Retrieve relevant notes |
 | `NutritionCalcTool` | `calculateNutrition(food, quantity)` | Calorie/macro breakdown |
 
-- [ ] Implement each tool as a `@Component` Spring bean
-- [ ] Register tools with Embabel's tool registry / `@Action` declarations
-- [ ] Add `POST /api/coach-advice` endpoint that uses `CoachAgent` with tools
+- [x] Implement each tool as a `@Component` Spring bean
+- [x] Register tools with Embabel's tool registry / `@Action` declarations
+- [x] Add `POST /api/coach-advice` endpoint that uses `CoachAgent` with tools
 
-**Before coding each tool, document:**
-1. Inputs / outputs
-2. Read-only or mutating?
-3. Can the model call it safely without human confirmation?
+**Deliverable:** `POST /api/coach-advice` returns a typed `CoachAdvice` JSON backed by 3 tools. ✅
+**Design notes:**
+- Tool pattern used: *pre-fetch / augmented context* — Java code calls tools before the LLM call.
+  LLM-directed tool calling (model decides when to invoke) deferred to Phase 7.
+- `WebSearchTool` is a stub (keyword-keyed canned responses); Phase 10 RAG will replace it.
+- `MemoryTool` uses an in-memory `ConcurrentHashMap`; Phase 4 will replace with JPA `AgentNote`.
+- `NutritionCalcTool` uses a hard-coded USDA-based macro table; real API call optional upgrade.
+- Mutating tool calls (`storeMemory`) happen *after* the LLM call (write-last safety principle).
+- 27/27 unit tests pass (`mvn test`).
 
 ---
 
