@@ -4,6 +4,7 @@ import com.embabel.agent.domain.io.UserInput;
 import com.embabel.agent.test.unit.FakeOperationContext;
 import com.embabel.agent.test.unit.FakePromptRunner;
 import com.nutritioncoach.model.CoachAdvice;
+import com.nutritioncoach.memory.InMemoryMemoryService;
 import com.nutritioncoach.tool.MemoryTool;
 import com.nutritioncoach.tool.NutritionCalcTool;
 import com.nutritioncoach.tool.WebSearchTool;
@@ -88,7 +89,7 @@ class CoachAgentTest {
         var agent = new CoachAgent(
                 new WebSearchTool(),
                 new NutritionCalcTool(),
-                new MemoryTool()
+                new MemoryTool(new InMemoryMemoryService())
         );
         String topic = "creatine supplementation";
 
@@ -118,7 +119,7 @@ class CoachAgentTest {
         var agent = new CoachAgent(
                 new WebSearchTool(),
                 new NutritionCalcTool(),
-                new MemoryTool()
+                new MemoryTool(new InMemoryMemoryService())
         );
 
         agent.advise(new UserInput("creatine performance", Instant.now()), context.ai());
@@ -140,7 +141,7 @@ class CoachAgentTest {
         var agent = new CoachAgent(
                 new WebSearchTool(),
                 new NutritionCalcTool(),
-                new MemoryTool()
+                new MemoryTool(new InMemoryMemoryService())
         );
 
         agent.advise(new UserInput("salmon meals", Instant.now()), context.ai());
@@ -163,7 +164,7 @@ class CoachAgentTest {
         var agent = new CoachAgent(
                 new WebSearchTool(),
                 new NutritionCalcTool(),
-                new MemoryTool()
+                new MemoryTool(new InMemoryMemoryService())
         );
 
         // Act
@@ -180,7 +181,7 @@ class CoachAgentTest {
         var context = FakeOperationContext.create();
         context.expectResponse(FAKE_ADVICE);
 
-        var memoryTool = new MemoryTool();
+        var memoryTool = new MemoryTool(new InMemoryMemoryService());
         var agent = new CoachAgent(
                 new WebSearchTool(),
                 new NutritionCalcTool(),
@@ -205,7 +206,7 @@ class CoachAgentTest {
         var promptRunner = (FakePromptRunner) context.promptRunner();
         context.expectResponse(FAKE_ADVICE);
 
-        var memoryTool = new MemoryTool();
+        var memoryTool = new MemoryTool(new InMemoryMemoryService());
         String topic = "omega-3 dosing";
         // The stored note must contain the topic as a substring for lookupNotes to match it.
         String preSeedNote = "Coached on: " + topic + " — previous session";

@@ -6,6 +6,7 @@ import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.Ai;
 import com.embabel.agent.domain.io.UserInput;
 import com.nutritioncoach.model.CoachAdvice;
+import com.nutritioncoach.model.ResearchBrief;
 import com.nutritioncoach.tool.MemoryTool;
 import com.nutritioncoach.tool.NutritionCalcTool;
 import com.nutritioncoach.tool.WebSearchTool;
@@ -196,6 +197,137 @@ public class CoachAgent {
         // ── Step 5: store this coaching session in memory (mutating — done last) ─
         // MERN analogy: await db.notes.insert({ userId, content }) after the LLM call.
         memoryTool.storeMemory(DEFAULT_USER_ID, "Coached on: " + topic);
+
+        return advice;
+    }
+
+    // ───────────────────────────────────────────────────────────────────────────
+    // Phase 5 — Step 2 of the two-agent pipeline
+    // ───────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Synthesise personalised coaching advice FROM a pre-built ResearchBrief.
+     *
+     * This is the second step in the Phase 5 two-agent pipeline:
+     *   UserInput → ResearchAgent.gatherFacts → ResearchBrief
+     *                                                   ↓
+     *                             CoachAgent.coachFromResearch → CoachAdvice
+     *
+     * Why a separate action (not just reuse advise())?:
+     *   advise() starts from raw text and pre-fetches its own web research.
+     *   This action starts from a typed ResearchBrief produced by ResearchAgent —
+     *   the research is already done and structured.  The prompt uses the
+     *   ResearchBrief fields directly instead of the raw web search output.
+     *
+     * Pipeline advantage over advise():
+     *   ResearchAgent can be specialised (e.g. query PubMed, use RAG), and
+     *   CoachAgent focuses only on personalisation.  Separation of concerns.
+     *
+     * Embabel GOAP planning:
+     *   When the world state contains ResearchBrief (not UserInput), Embabel's
+     *   planner picks this action because its precondition (ResearchBrief present)
+     *   is satisfied.  advise() requires UserInput, which is absent in step 2.
+     *   MERN analogy: Mastra workflow step that receives its input from the
+     *   previous step's output, not from the raw user message.
+     *
+     * Tools used here (vs advise):
+     *   • NutritionCalcTool — still called; ResearchBrief has findings but no macros
+     *   • MemoryTool.lookupNotes — personalise using prior coaching history
+     *   • WebSearchTool — NOT called; research context already in ResearchBrief
+     *   • MemoryTool.storeMemory — still called last (write-last principle)
+     *
+     * @param brief pre-built research summary from ResearchAgent
+     * @param ai    Embabel's LLM gateway
+     * @return structured CoachAdvice
+     *
+     * Book ref: Chapter 4 — Agents 101
+     *   Multi-agent pipelines: "Each agent does one thing well.
+     *    ResearchAgent = gather structured knowledge.
+     *    CoachAgent    = personalise and contextualise that knowledge."
+     *
+     * Book ref: Chapter 7 — Memory (Pipeline step)
+     *   The MemoryTool lookup ensures prior coaching notes are injected even
+     *   in the pipeline path, preserving continuity across sessions.
+     */
+    @AchievesGoal(description = "Produce personalised CoachAdvice from a pre-built ResearchBrief (pipeline step 2)")
+    @Action
+    public CoachAdvice coachFromResearch(ResearchBrief brief, Ai ai) {
+        String topic = brief.topic();
+
+        // ── Step 1: add macro data (ResearchBrief has findings, not macros) ───
+        // MERN analogy: const macros = await nutritionCalcTool.execute({ food: topic })
+        String nutritionData = nutritionCalcTool.calculateNutrition(topic, "standard serving");
+
+        // ── Step 2: retrieve previous coaching notes for personalisation ────
+        // MERN analogy: const history = await memory.query({ userId, query: topic })
+        List<String> previousNotes = memoryTool.lookupNotes(DEFAULT_USER_ID, topic);
+        String notesContext = previousNotes.isEmpty()
+                ? "No previous notes for this user on this topic."
+                : "Previous coaching notes:\n- " + String.join("\n- ", previousNotes);
+
+        // ── Step 3: build findings block from ResearchBrief ────────────────
+        // This is the key difference from advise(): we use the structured brief
+        // instead of a raw web search string.  The LLM gets cleaner, typed data.
+        //
+        // MERN analogy: template literal that destructures the ResearchBrief:
+        //   `Key findings:\n${brief.keyFindings.join('\n')}`
+        String researchContext = """
+                Topic: %s
+
+                Key Findings:
+                %s
+
+                Known Risks:
+                %s
+
+                Follow-up Questions (for reference):
+                %s
+                """.formatted(
+                brief.topic(),
+                String.join("\n", brief.keyFindings()),
+                String.join("\n", brief.risks()),
+                String.join("\n", brief.nextQuestions())
+        );
+
+        // ── Step 4: call the LLM with enriched prompt ─────────────────────
+        // Same multi-section prompt pattern as advise(), but the
+        // "WEB SEARCH CONTEXT" section is replaced by structured ResearchBrief data.
+        //
+        // Book ref: Chapter 3 — Writing Great Prompts
+        //   Structured, labelled input sections reduce hallucination.
+        CoachAdvice advice = ai
+                .withDefaultLlm()
+                .createObject("""
+                        You are a warm, knowledgeable, and personalised nutrition coach.
+                        You have been given a pre-researched brief from a research agent.
+                        Your task is to synthesise it into actionable coaching advice
+                        tailored to the user.
+
+                        ── RESEARCH BRIEF ──────────────────────────────────────────────────
+                        %s
+
+                        ── NUTRITION CALCULATION DATA ───────────────────────────────────
+                        %s
+
+                        ── USER HISTORY ────────────────────────────────────────────────────
+                        %s
+
+                        ── INSTRUCTIONS ────────────────────────────────────────────────────
+                        Base your advice strictly on the research brief and nutrition
+                        data above. Do not invent studies or statistics not mentioned.
+
+                        Your response must include:
+                        - summary:     2–3 sentence plain-language overview
+                        - actionItems: 3–5 concrete, measurable steps the user can take
+                                       starting this week
+                        - weeklyGoal:  a single measurable target for the next 7 days
+                        - disclaimer:  a brief safety reminder (not medical advice)
+                        """.formatted(researchContext, nutritionData, notesContext),
+                        CoachAdvice.class);
+
+        // ── Step 5: store coaching session (mutating — write last) ─────────
+        // MERN analogy: await memory.save({ userId, content: 'Coached on: ...' })
+        memoryTool.storeMemory(DEFAULT_USER_ID, "Coached on (pipeline): " + topic);
 
         return advice;
     }

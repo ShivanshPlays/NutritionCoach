@@ -233,21 +233,21 @@ CREATE TABLE agent_note (
 
 ---
 
-### Phase 5 — CoachAgent + Multi-step Flow
+### Phase 5 — CoachAgent + Multi-step Flow ✅
 *Goal: a second agent that builds on research output.*
 
-- [ ] Create `CoachAgent` that accepts a `ResearchBrief` as input and produces `CoachAdvice`
-- [ ] Create `CoachAdvice` structured output record:
-  ```java
-  record CoachAdvice(
-      String summary,
-      List<String> actionItems,
-      String weeklyGoal,
-      String disclaimer
-  ) {}
-  ```
-- [ ] Create a two-step workflow: ResearchAgent → CoachAgent
-- [ ] Expose as `POST /api/full-advice` (topic → CoachAdvice)
+- [x] Create `CoachAgent` that accepts a `ResearchBrief` as input and produces `CoachAdvice`
+  - Added `coachFromResearch(ResearchBrief, Ai)` `@Action @AchievesGoal` method
+  - Embabel GOAP auto-selects this path when ResearchBrief is in the blackboard
+- [x] Create `CoachAdvice` structured output record (was in Phase 3, reused here)
+- [x] Create a two-step workflow: ResearchAgent → CoachAgent
+  - Explicit Java pipeline in `FullAdviceController` (`AgentInvocation` called twice)
+- [x] Expose as `POST /api/full-advice` (topic → CoachAdvice)
+  - `FullAdviceController` — validates `@NotBlank topic`, runs 2-step pipeline
+- [x] Extract `MemoryService` interface; `JpaMemoryService` (prod) + `InMemoryMemoryService` (tests)
+  - Maps to Mastra's backing-store abstraction (LibSQLStore vs InMemoryStorage)
+- [x] 7 new tests in `CoachAgentPipelineTest` — 35 total passing
+- [x] Postman folder `05 - Full Advice Pipeline` added with happy-path + error requests
 
 ---
 
