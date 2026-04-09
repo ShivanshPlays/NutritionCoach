@@ -1,0 +1,5 @@
+# SDKMAN project-level SDK pinning
+# MERN/Next.js analogy: equivalent of .nvmrc / .node-version for Node.js
+# Run `sdk env` to activate, or enable auto-env in ~/.sdkman/etc/config:
+#   sdkman_auto_env=true
+java=25.0.2-tem

@@ -538,6 +538,189 @@
 			],
 			"id": "47029495-8cb3195f-9697-4dd2-b371-7fa0eab5752f",
 			"description": "Structured output endpoint — returns a ResearchBrief JSON object instead of free text.\n\nMERN analogy: like Vercel AI SDK generateObject() + Zod schema.\nSpring AI calls .entity(ResearchBrief.class) which auto-generates a JSON schema,\nappends it to the prompt, and deserialises the model's JSON response.\n\nRequest:  { \"topic\": string }   — @NotBlank validated\nResponse: ResearchBrief { topic, keyFindings[], risks[], nextQuestions[] }\n\nBook ref: Chapter 5 — Structured Output."
+		},
+		{
+			"name": "04 - Coach Advice (POST /api/coach-advice)",
+			"item": [
+				{
+					"name": "POST /api/coach-advice — happy path",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 200', () => {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test('Response has all CoachAdvice fields', () => {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json).to.have.property('summary');",
+									"    pm.expect(json).to.have.property('actionItems');",
+									"    pm.expect(json).to.have.property('weeklyGoal');",
+									"    pm.expect(json).to.have.property('disclaimer');",
+									"});",
+									"",
+									"pm.test('summary is a non-empty string', () => {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.summary).to.be.a('string').and.not.empty;",
+									"});",
+									"",
+									"pm.test('actionItems is a non-empty array', () => {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.actionItems).to.be.an('array').and.not.empty;",
+									"});",
+									"",
+									"pm.test('weeklyGoal is a non-empty string', () => {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.weeklyGoal).to.be.a('string').and.not.empty;",
+									"});",
+									"",
+									"pm.test('disclaimer is present', () => {",
+									"    const json = pm.response.json();",
+									"    pm.expect(json.disclaimer).to.be.a('string').and.not.empty;",
+									"});",
+									"",
+									"// Save last advice topic for chaining",
+									"const json = pm.response.json();",
+									"if (json.summary) {",
+									"    pm.environment.set('last_coach_summary', json.summary);",
+									"}"
+								],
+								"id": "47029495-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+							}
+						}
+					],
+					"id": "47029495-b2c3d4e5-f6a7-8901-bcde-f12345678901",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"topic\": \"omega-3 fatty acids for cardiovascular health\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/coach-advice",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"coach-advice"
+							]
+						},
+						"description": "Requests personalised coaching advice for a nutrition topic.\n\nCoachAgent will:\n1. Call WebSearchTool.searchWeb(topic)       — supplementary facts\n2. Call NutritionCalcTool.calculateNutrition — macro data\n3. Call MemoryTool.lookupNotes              — user history\n4. Build enriched prompt → Gemini → CoachAdvice\n5. Call MemoryTool.storeMemory              — persist session\n\nExpected response shape: { summary, actionItems[], weeklyGoal, disclaimer }"
+					},
+					"response": [
+						{
+							"id": "47029495-c3d4e5f6-a7b8-9012-cdef-123456789012",
+							"name": "200 OK — example CoachAdvice",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"topic\": \"omega-3 fatty acids for cardiovascular health\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/coach-advice",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"coach-advice"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"responseTime": null,
+							"body": "{\n    \"summary\": \"Omega-3 fatty acids EPA and DHA, found in fatty fish and algae supplements, have strong evidence for reducing triglycerides and supporting cardiovascular health. Aim for 1–2 g EPA+DHA daily from whole-food sources or a high-quality supplement.\",\n    \"actionItems\": [\n        \"Eat 150 g of salmon or mackerel at least 3 times this week\",\n        \"If using supplements, choose a triglyceride-form fish oil with >500 mg EPA+DHA per capsule\",\n        \"Replace refined seed oils (sunflower, corn) with olive oil for cooking\",\n        \"Add 1 tbsp of ground flaxseed to breakfast daily for ALA intake\"\n    ],\n    \"weeklyGoal\": \"Consume at least 3 servings of fatty fish or take a daily 1 g EPA+DHA supplement every day this week.\",\n    \"disclaimer\": \"This advice is for informational purposes only and does not substitute for medical advice from a qualified healthcare professional.\"\n}"
+						}
+					]
+				},
+				{
+					"name": "POST /api/coach-advice — blank topic (400 validation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status code is 400 (validation error)', () => {",
+									"    pm.response.to.have.status(400);",
+									"});"
+								],
+								"id": "47029495-d4e5f6a7-b8c9-0123-defa-234567890123"
+							}
+						}
+					],
+					"id": "47029495-e5f6a7b8-c9d0-1234-efab-345678901234",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"topic\": \"\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/coach-advice",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"coach-advice"
+							]
+						},
+						"description": "Blank topic should trigger @NotBlank Bean Validation.\n\nMERN analogy: Zod z.string().min(1) rejecting an empty string.\n\nExpected: 400 Bad Request."
+					},
+					"response": []
+				}
+			],
+			"id": "47029495-f6a7b8c9-d0e1-2345-fabc-456789012345",
+			"description": "Personalised coaching advice endpoint backed by CoachAgent with three tools.\n\nPhase 3 implementation: CoachAgent pre-fetches context from WebSearchTool,\nNutritionCalcTool, and MemoryTool before making a single structured LLM call.\n\nMERN analogy: mastra.getAgent('coachAgent').generate({ topic }) where the\nagent was initialised with tools: { webSearch, nutritionCalc, memory }.\n\nRequest:  { \"topic\": string }   — @NotBlank validated\nResponse: CoachAdvice { summary, actionItems[], weeklyGoal, disclaimer }\n\nBook ref: Chapter 6 — Tool Calling (pre-fetch / augmented context pattern).\nBook ref: Chapter 10 — Third-Party Tools & Integrations (WebSearchTool stub)."
 		}
 	]
 }

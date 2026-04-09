@@ -61,9 +61,14 @@ Follow the Implementation Discipline principle: only add what is needed for the
 current phase.  No premature abstractions, no speculative features.
 
 ### 7 — Maintain the Postman test suite in sync
-The collection and environment live in `postman/`:
-- `postman/NutritionCoach.postman_collection.json`
+The collection and environment live in `postman/` — exactly **two files**:
+- `postman/47029495-4f94b12c-c40e-473e-abb7-68094b25f361.json`  ← collection (Postman auto-syncs this file using the `_postman_id` as filename)
 - `postman/NutritionCoach.postman_environment.json`
+
+> **Why the UUID filename?**
+> Postman's local file storage names collection files after their internal `_postman_id`.
+> To keep Copilot and Postman working on the same file, always edit the UUID-named file
+> directly. Never create a second collection file with a human-readable name.
 
 **Every time you add or change an endpoint, you MUST also:**
 
