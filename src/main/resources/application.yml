@@ -72,18 +72,34 @@ spring:
 
   jpa:
     hibernate:
-      # create-drop = Hibernate creates tables from @Entity classes on startup
-      # and drops them on shutdown. Works fine until Flyway takes over in Phase 4.
-      # MERN analogy: like Mongoose auto-creating collections from schemas.
-      ddl-auto: create-drop
+      # Phase 4: Flyway now owns the schema — ddl-auto must be 'none' so
+      # Hibernate does NOT auto-create/drop tables on top of Flyway migrations.
+      # Phase 3 used 'create-drop' (Hibernate managed everything from @Entity).
+      # MERN analogy: like disabling Mongoose's auto-index creation once you
+      # manage indexes manually via Atlas / Prisma migrations.
+      ddl-auto: none
     show-sql: false
     open-in-view: false        # best practice: avoids lazy-loading traps in web layer
 
-  # ── Flyway – disabled until Phase 4 adds real DB migrations ──────────────
-  # MERN analogy: like Prisma migrations (prisma migrate dev).
-  # Flyway runs versioned SQL scripts in src/main/resources/db/migration/.
+  # ── Flyway — database migrations ──────────────────────────────────────────
+  #
+  # Flyway is the Java equivalent of Prisma Migrate or Liquibase.
+  # It runs SQL scripts in src/main/resources/db/migration/ in version order:
+  #   V1__init.sql              — create conversation_message, user_profile, agent_note
+  #   V2__agent_note_dedup.sql  — add UNIQUE(user_id, content) on agent_note
+  #
+  # MERN analogy:
+  #   In Prisma you'd run: npx prisma migrate deploy
+  #   Flyway does the same automatically at application startup.
+  #   The migration files are the equivalent of .sql files in prisma/migrations/.
+  #
+  # Book ref: Chapter 7 — Memory
+  #   Persistent schema management is the foundation of long-term memory.
+  #   Flyway's versioned scripts ensure every environment (dev, staging, prod)
+  #   runs the exact same schema evolution path.
   flyway:
-    enabled: false
+    enabled: true
+    locations: classpath:db/migration
 
 # ── Embabel Agent Platform ───────────────────────────────────────────────
 # MERN analogy: equivalent of `new Mastra({ agents: [...] })` configuration.

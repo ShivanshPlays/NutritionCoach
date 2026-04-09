@@ -1,5 +1,7 @@
 package com.nutritioncoach.api;
 
+import com.nutritioncoach.memory.ConversationMessage;
+import com.nutritioncoach.memory.MemoryService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.ai.chat.client.ChatClient;
@@ -9,9 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Phase 0 REST endpoints: health check + raw Gemini chat
+ * Phase 0-4 REST endpoints: health check + Gemini chat with memory
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * MERN/Next.js analogy -- @RestController + @RequestMapping:
@@ -34,40 +38,62 @@ import org.springframework.web.bind.annotation.RestController;
  *   In Node you'd: const chatClient = new ChatClient(config)
  *   In Spring you declare the dep in the constructor, Spring injects it.
  *   No `new`, no manual wiring -- Spring owns the object lifecycle.
- *   Think of it as: Spring reads all constructors like an IoC container and
- *   resolves the full dependency graph automatically.
  *
  * @RequestBody -- MERN analogy: req.body in Express, await request.json() in Next.js.
- *   Spring reads the JSON body and deserialises it into the record automatically.
+ * @Valid       -- MERN analogy: Zod .parse() / .safeParse().
  *
- * @Valid -- MERN analogy: Zod .parse() / .safeParse().
- *   Triggers Bean Validation annotations before the method body runs.
- *   If @NotBlank fails, Spring returns a 400 automatically.
+ * Phase 4 addition — conversation history window:
+ *   Each POST /api/chat now:
+ *     1. Saves the user turn to conversation_message (JPA / H2 → PostgreSQL later).
+ *     2. Fetches the last HISTORY_WINDOW turns from DB.
+ *     3. Formats them as a history block injected into the system prompt.
+ *     4. Calls Gemini with the enriched context.
+ *     5. Saves the assistant reply.
+ *
+ *   MERN analogy:
+ *     await db.message.create({ data: { userId, role: 'user', content } })
+ *     const history = await db.message.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 8 })
+ *     history.reverse()
+ *     const result = await generateText({ system: buildSystemPrompt(history), prompt: message })
+ *     await db.message.create({ data: { userId, role: 'assistant', content: result.text } })
  *
  * Book ref: Chapter 2 -- Choosing a Provider & Model
- *   Verifying the provider connection works end-to-end is the first milestone
- *   the book recommends before building any agent logic.
+ *   Verifying provider connectivity end-to-end is the first milestone.
  *
  * Book ref: Chapter 3 -- Writing Great Prompts
- *   The system prompt here shows the "role + scope + constraints" pattern.
+ *   The system prompt uses the "role + scope + context" pattern; history block is
+ *   the "context" section added in Phase 4.
+ *
+ * Book ref: Chapter 7 -- Memory
+ *   The conversation window (last N turns) is the simplest form of short-term
+ *   memory.  This phase implements the "sliding window" strategy the book describes.
  *
  * Endpoints:
- *   GET  /api/health  -- liveness probe (used by load balancers / k8s)
- *   POST /api/chat    -- raw free-text Gemini round-trip (Phase 0 smoke test)
+ *   GET  /api/health  -- liveness probe
+ *   POST /api/chat    -- Gemini round-trip with persistent conversation window
  */
 @RestController
 // MERN analogy: like express.Router() then app.use('/api', router)
 @RequestMapping("/api")
 public class ChatController {
 
-    // MERN analogy: like importing a shared `aiClient` module instance.
-    // Spring injects the ChatClient bean built in ChatClientConfig automatically.
-    private final ChatClient chatClient;
+    // Number of previous turns to inject into each prompt (sliding window).
+    // Book ref: Chapter 7 — Memory — "context window" strategy.
+    // MERN analogy: const HISTORY_WINDOW = 8 in your AI route module.
+    private static final int HISTORY_WINDOW = 8;
 
-    // Constructor injection -- preferred over @Autowired field injection.
-    // Spring sees this constructor, finds a ChatClient bean, and passes it in.
-    public ChatController(ChatClient chatClient) {
+    // Phase 4: hard-coded until Phase 6 adds auth.
+    // MERN analogy: const DEFAULT_USER_ID = 'default' in a userId middleware placeholder.
+    private static final String DEFAULT_USER_ID = "default";
+
+    private final ChatClient chatClient;
+    private final MemoryService memoryService;
+
+    // Spring injects both beans automatically via constructor injection.
+    // MERN analogy: destructuring deps from a DI container or passing them explicitly.
+    public ChatController(ChatClient chatClient, MemoryService memoryService) {
         this.chatClient = chatClient;
+        this.memoryService = memoryService;
     }
 
     // -- GET /api/health -----------------------------------------------
@@ -82,7 +108,7 @@ public class ChatController {
     // ChatClient fluent chain -- equivalent to Vercel AI SDK:
     //   generateText({
     //     model: gemini('gemini-2.0-flash'),
-    //     system: 'You are a nutrition coach...',
+    //     system: buildSystemPrompt(history),
     //     prompt: message,
     //   })
     //
@@ -92,13 +118,62 @@ public class ChatController {
     // .content()  <- returns raw String (like `result.text` in Vercel AI SDK)
     @PostMapping("/chat")
     public ChatResponse chat(@RequestBody @Valid ChatRequest request) {
+        // 1. Persist the incoming user turn.
+        // MERN analogy: await db.message.create({ data: { userId, role:'user', content } })
+        memoryService.saveMessage(DEFAULT_USER_ID, "user", request.message());
+
+        // 2. Load the last HISTORY_WINDOW turns (oldest → newest).
+        // MERN analogy: history = await memory.getRecentMessages(userId, HISTORY_WINDOW)
+        List<ConversationMessage> history = memoryService.getRecentMessages(DEFAULT_USER_ID, HISTORY_WINDOW);
+
+        // 3. Build system prompt with optional history block.
+        // Book ref: Chapter 3 — Writing Great Prompts
+        //   Injecting history as a well-labelled "Conversation history:" section
+        //   follows the "structured context" pattern from the book.
+        String systemPrompt = buildSystemPrompt(history);
+
+        // 4. Call the LLM.
         String reply = chatClient.prompt()
-                .system("You are a helpful nutrition coach assistant. " +
-                        "Provide concise, evidence-based answers about nutrition and healthy eating.")
+                .system(systemPrompt)
                 .user(request.message())
                 .call()
                 .content();
+
+        // 5. Persist the assistant reply so the next call can reference it.
+        // MERN analogy: await db.message.create({ data: { userId, role:'assistant', content: reply } })
+        memoryService.saveMessage(DEFAULT_USER_ID, "assistant", reply);
+
         return new ChatResponse(reply);
+    }
+
+    // -- Helpers -------------------------------------------------------
+
+    /**
+     * Build the system prompt string, optionally prepended with the
+     * formatted conversation history block.
+     *
+     * Keeping history in the system prompt (rather than as separate Message
+     * objects) is the simplest approach for now; Phase 10 will move to a
+     * proper multi-turn message list when pgvector retrieval is introduced.
+     *
+     * MERN analogy:
+     *   function buildSystemPrompt(history) {
+     *     const historyBlock = history.map(m => `${m.role}: ${m.content}`).join('\n')
+     *     return `You are a helpful nutrition coach...\n\nConversation history:\n${historyBlock}`
+     *   }
+     */
+    private String buildSystemPrompt(List<ConversationMessage> history) {
+        String base = "You are a helpful nutrition coach assistant. " +
+                "Provide concise, evidence-based answers about nutrition and healthy eating.";
+        if (history.isEmpty()) {
+            return base;
+        }
+        StringBuilder historyBlock = new StringBuilder();
+        for (ConversationMessage msg : history) {
+            String label = "user".equals(msg.getRole()) ? "User" : "Assistant";
+            historyBlock.append(label).append(": ").append(msg.getContent()).append("\n");
+        }
+        return base + "\n\nConversation history (oldest to newest):\n" + historyBlock.toString().trim();
     }
 
     // -- DTOs (Data Transfer Objects) ----------------------------------

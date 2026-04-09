@@ -1,11 +1,9 @@
 package com.nutritioncoach.tool;
 
+import com.nutritioncoach.memory.MemoryService;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -33,47 +31,48 @@ import java.util.concurrent.ConcurrentHashMap;
  *     await memory.saveMessages({ messages, config: { ... } })
  *     await memory.query({ threadId, query })
  *
- *   In Spring, the equivalent is a @Component service that wraps a
- *   persistence layer.  Phase 3 uses an in-memory ConcurrentHashMap
- *   (like a JS Map) for zero-config setup.  Phase 4 replaces this with
- *   a JPA entity (agent_note table) backed by H2/PostgreSQL.
+ *   In Spring, this @Component is a thin facade over MemoryService (JPA).
+ *   The facade pattern keeps CoachAgent isolated from persistence details —
+ *   Phase 10 can swap the backing store without touching the agent.
  *
- * Implementation notes:
- *   The ConcurrentHashMap is thread-safe for concurrent HTTP requests.
- *   It is reset on every application restart — this is intentional for
- *   Phase 3 (stateless dev iteration).  Phase 4 introduces Flyway
- *   migrations and persistent JPA storage.
- *
- *   lookupNotes() performs a case-insensitive substring match.
- *   Phase 10 (RAG) will upgrade this to embedding-based similarity search
- *   against a pgvector store for semantic retrieval.
+ * Phase 4 change:
+ *   Replaced in-memory ConcurrentHashMap with MemoryService (JPA / H2).
+ *   Deduplication: MemoryService.saveNote() is idempotent — duplicate notes
+ *   are silently ignored (app-level check + DB unique constraint as guard).
+ *   Phase 4 dedup strategy: UNIQUE constraint on (user_id, content) +
+ *   INSERT ON CONFLICT DO NOTHING (idempotent upsert via saveNote).
  *
  * Book ref: Chapter 7 — Memory
  *   "Short-term memory = the conversation window.
  *    Long-term memory  = persistent notes and user profile."
  *   This tool represents the long-term note storage layer.
- *   The short-term (conversation window) is added in Phase 4.
+ *   The short-term (conversation window) is managed by MemoryService directly
+ *   and injected into ChatController prompts.
  * ══════════════════════════════════════════════════════════════════════════
  */
 @Component
 public class MemoryTool {
 
-    // Phase 3: in-memory store.  Phase 4: replaced by JPA AgentNote entity.
-    // Phase 4 dedup strategy: UNIQUE constraint on (user_id, content) + INSERT ON CONFLICT DO NOTHING.
-    // MERN analogy: a plain JS Map<string, string[]> — replaced by a DB query.
-    private final ConcurrentHashMap<String, List<String>> notes = new ConcurrentHashMap<>();
+    // Phase 4: delegates to MemoryService (JPA-backed).
+    // MERN analogy: injecting a db client or Prisma instance via constructor DI.
+    private final MemoryService memoryService;
+
+    public MemoryTool(MemoryService memoryService) {
+        this.memoryService = memoryService;
+    }
 
     /**
      * Persist a free-text note associated with a userId.
+     * Idempotent — calling this twice with the same arguments is safe.
      *
-     * @param userId the user who owns this note (Phase 3: any string key)
+     * @param userId the user who owns this note
      * @param note   the text to store
      *
-     * MERN analogy: memory.save({ userId, content }) or a DB INSERT in a
+     * MERN analogy: memory.save({ userId, content }) or a DB INSERT/upsert in a
      * Next.js API route.
      */
     public void storeMemory(String userId, String note) {
-        notes.computeIfAbsent(userId, k -> new ArrayList<>()).add(note);
+        memoryService.saveNote(userId, "coaching", note);
     }
 
     /**
@@ -87,14 +86,7 @@ public class MemoryTool {
      * SELECT * FROM agent_notes WHERE content ILIKE '%query%' in Prisma.
      */
     public List<String> lookupNotes(String userId, String query) {
-        List<String> all = notes.getOrDefault(userId, Collections.emptyList());
-        if (query == null || query.isBlank()) {
-            return new ArrayList<>(all);
-        }
-        String lq = query.toLowerCase();
-        return all.stream()
-                .filter(n -> n.toLowerCase().contains(lq))
-                .toList();
+        return memoryService.findNotes(userId, query);
     }
 
     /**
@@ -105,6 +97,6 @@ public class MemoryTool {
      * @return all stored notes for this user
      */
     public List<String> getAllNotes(String userId) {
-        return new ArrayList<>(notes.getOrDefault(userId, Collections.emptyList()));
+        return memoryService.findNotes(userId, null);
     }
 }
