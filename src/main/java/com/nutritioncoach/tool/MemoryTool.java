@@ -59,6 +59,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MemoryTool {
 
     // Phase 3: in-memory store.  Phase 4: replaced by JPA AgentNote entity.
+    // Phase 4 dedup strategy: UNIQUE constraint on (user_id, content) + INSERT ON CONFLICT DO NOTHING.
     // MERN analogy: a plain JS Map<string, string[]> — replaced by a DB query.
     private final ConcurrentHashMap<String, List<String>> notes = new ConcurrentHashMap<>();
 

@@ -215,10 +215,15 @@ CREATE TABLE agent_note (
 ```
 
 - [ ] Create JPA entities + Spring Data repositories for all three tables
+- [ ] Add unique constraint on `agent_note (user_id, content)` to enforce deduplication at DB level:
+  ```sql
+  -- V2__agent_note_dedup.sql
+  ALTER TABLE agent_note ADD CONSTRAINT uq_agent_note_user_content UNIQUE (user_id, content);
+  ```
 - [ ] Implement `MemoryService`:
   - `saveMessage(userId, role, content)`
   - `getRecentMessages(userId, n)` → last N messages
-  - `saveNote(userId, noteType, content)`
+  - `saveNote(userId, noteType, content)` — use `INSERT ... ON CONFLICT DO NOTHING` (idempotent upsert)
   - `findNotes(userId, query)` → keyword match (upgrade to vector later)
 - [ ] Inject memory context into prompts (window of last 8 messages + relevant notes)
 
