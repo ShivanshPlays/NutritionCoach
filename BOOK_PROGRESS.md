@@ -48,7 +48,7 @@ It is updated after every task that maps to a chapter.
 | Ch | Title | Core concept | MERN/JS equivalent | Status | Implementing files | Notes |
 |---|---|---|---|---|---|---|
 | 8 | Dynamic Agents | Changing instructions, tools, or model at runtime based on context/user tier | Mastra conditional tool lists; runtime `instructions` override | 📋 | *(Phase 7)* | `AgentRouter` will switch model + tool set based on `UserTier` |
-| 9 | Middleware & Guardrails | Input sanitisation, prompt injection detection, output moderation | Express middleware (`app.use()`); Mastra middleware hooks | 📋 | *(Phase 6)* | Spring `HandlerInterceptor` + `CriticAgent` for quality gating |
+| 9 | Middleware & Guardrails | Input sanitisation, prompt injection detection, output moderation | Express middleware (`app.use()`); Mastra middleware hooks | ✅ | [InputSanitiser.java](src/main/java/com/nutritioncoach/guardrail/InputSanitiser.java), [InputGuardrailFilter.java](src/main/java/com/nutritioncoach/guardrail/InputGuardrailFilter.java), [OutputModerator.java](src/main/java/com/nutritioncoach/guardrail/OutputModerator.java), [RateLimiter.java](src/main/java/com/nutritioncoach/guardrail/RateLimiter.java), [ApiKeyInterceptor.java](src/main/java/com/nutritioncoach/guardrail/ApiKeyInterceptor.java), [CriticAgent.java](src/main/java/com/nutritioncoach/agent/CriticAgent.java), [GuardrailExceptionHandler.java](src/main/java/com/nutritioncoach/api/GuardrailExceptionHandler.java) | Phase 6: `OncePerRequestFilter` for injection detection; `HandlerInterceptor` for API-key auth; `OutputModerator` for keyword safety; `CriticAgent` for LLM-as-judge semantic gating; `RateLimiter` sliding-window per userId |
 | 10 | Third-Party Tools & Integrations | Wrapping external APIs as agent-callable tools | Mastra community tools (`@mastra/tools`) | � | [WebSearchTool.java](src/main/java/com/nutritioncoach/tool/WebSearchTool.java) | `WebSearchTool` stub wraps a simulated search API; Phase 10 RAG will replace backing with real search (Brave/Tavily) or pgvector retrieval |
 | 11 | Model Context Protocol (MCP) | Standard interface for connecting agents to tool servers | MCP SDK for Node.js; `@mastra/mcp` | 📋 | *(Phase 14)* | Embabel can expose tools as an MCP server over SSE |
 
@@ -95,7 +95,7 @@ It is updated after every task that maps to a chapter.
 | Ch | Title | Core concept | MERN/JS equivalent | Status | Implementing files | Notes |
 |---|---|---|---|---|---|---|
 | 27 | Evaluations — Overview | Why LLM output needs tests; non-determinism | Mastra `evalSet`; Promptfoo | 📋 | *(Phase 13)* | `EvalService` with JUnit-based assertion fixtures |
-| 28 | Writing LLM Evals | Schema checks, grounding scores, safety filters, tool-coverage asserts | Mastra LLM-as-judge evals | 📋 | *(Phase 13)* | Five eval categories mapped to JUnit tests |
+| 28 | Writing LLM Evals | Schema checks, grounding scores, safety filters, tool-coverage asserts | Mastra LLM-as-judge evals | � | [CriticAgent.java](src/main/java/com/nutritioncoach/agent/CriticAgent.java), [CriticScore.java](src/main/java/com/nutritioncoach/model/CriticScore.java), [CriticAgentTest.java](src/test/java/com/nutritioncoach/agent/CriticAgentTest.java) | Phase 6: `CriticAgent` implements LLM-as-judge pattern inline (score 0-100 + safe flag + retry). Full offline eval suite (Phase 13) remains 📋 |
 | 29 | CI for AI | Running evals in CI; gating merges on quality thresholds | GitHub Actions + Promptfoo CI | 📋 | *(Phase 13)* | Maven Surefire gate; CI config TBD |
 
 ---
@@ -118,7 +118,7 @@ Phase 2  → Ch 4          (first Embabel @Agent)                       📋
 Phase 3  → Ch 6, 10      (tool calling, third-party tools)            📋
 Phase 4  → Ch 7          (memory layer)                               📋
 Phase 5  → Ch 12         (first workflow: Research → Coach)           📋
-Phase 6  → Ch 9          (guardrails & middleware)                    📋
+Phase 6  → Ch 9          (guardrails & middleware)                    ✅
 Phase 7  → Ch 8          (dynamic agents / model routing)             📋
 Phase 8  → LoggerAgent   (memory lifecycle agent)                     📋
 Phase 9  → Ch 13, 16     (branching workflows, observability)         📋

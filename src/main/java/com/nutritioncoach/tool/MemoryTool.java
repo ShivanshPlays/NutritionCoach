@@ -50,8 +50,6 @@ import java.util.List;
  *   and injected into ChatController prompts.
  * ══════════════════════════════════════════════════════════════════════════
  */
-@Component
-
 // How does Spring know which MemoryService to inject?
 // - In production, there is only one @Service implementing MemoryService: JpaMemoryService.
 //   Spring finds this bean and injects it into MemoryTool's constructor.

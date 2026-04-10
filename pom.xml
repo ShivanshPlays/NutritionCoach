@@ -19,7 +19,7 @@
     <packaging>jar</packaging>
 
     <properties>
-        <java.version>25</java.version>
+        <java.version>21</java.version>
         <!-- Embabel 0.3.4 was built against Spring AI 1.1.1; upgrading from 1.0.0 -->
         <spring-ai.version>1.1.1</spring-ai.version>
         <!-- Embabel: JVM agent framework, equivalent of Mastra on Node.js -->

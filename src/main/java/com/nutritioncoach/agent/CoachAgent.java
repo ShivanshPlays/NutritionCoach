@@ -89,7 +89,7 @@ public class CoachAgent {
     // ── Stable internal user key for single-user Phase 3 ──────────────────
     // In Phase 4 this will be replaced by the real userId from the request.
     // MERN analogy: a hardcoded 'userId: "default"' before auth is wired up.
-    static final String DEFAULT_USER_ID = "default";
+    public static final String DEFAULT_USER_ID = "default";
 
     // ── Tool dependencies — injected by Spring DI ─────────────────────────
     // @Agent is meta-annotated with @Component → Spring wires these via ctor.

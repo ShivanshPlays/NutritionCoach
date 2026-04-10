@@ -3,11 +3,16 @@ package com.nutritioncoach.api;
 import com.embabel.agent.api.invocation.AgentInvocation;
 import com.embabel.agent.core.AgentPlatform;
 import com.embabel.agent.domain.io.UserInput;
+import com.nutritioncoach.agent.CoachAgent;
+import com.nutritioncoach.guardrail.OutputModerator;
+import com.nutritioncoach.guardrail.RateLimiter;
 import com.nutritioncoach.model.CoachAdvice;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -72,8 +77,20 @@ public class CoachController {
     // AgentPlatform is the Embabel runtime bean, spring-wired here via ctor DI.
     private final AgentPlatform agentPlatform;
 
-    public CoachController(AgentPlatform agentPlatform) {
+    // Phase 6: guardrail components — output moderation + rate limiting.
+    // MERN analogy: injecting middleware services into the route handler.
+    private final OutputModerator outputModerator;
+    private final RateLimiter rateLimiter;
+    private final boolean guardrailEnabled;
+
+    public CoachController(AgentPlatform agentPlatform,
+                           OutputModerator outputModerator,
+                           RateLimiter rateLimiter,
+                           @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled) {
         this.agentPlatform = agentPlatform;
+        this.outputModerator = outputModerator;
+        this.rateLimiter = rateLimiter;
+        this.guardrailEnabled = guardrailEnabled;
     }
 
     // -- POST /api/coach-advice ---------------------------------------------
@@ -100,13 +117,27 @@ public class CoachController {
      * @return structured CoachAdvice JSON
      */
     @PostMapping("/coach-advice")
-    public CoachAdvice coachAdvice(@RequestBody @Valid CoachRequest req) {
+    public CoachAdvice coachAdvice(@RequestBody @Valid CoachRequest req,
+                                   @RequestHeader(value = "X-User-Id", defaultValue = CoachAgent.DEFAULT_USER_ID) String userId) {
+        // Phase 6: enforce rate limit before any LLM work is done.
+        // MERN analogy: rateLimiter.check(userId) in Express middleware.
+        if (guardrailEnabled) {
+            rateLimiter.check(userId);
+        }
+
         // AgentInvocation.create auto-selects CoachAgent because it is the
         // only registered agent whose @AchievesGoal produces CoachAdvice.
         // MERN analogy: mastra.getAgent('coachAgent').generate(req.topic())
-        // this is an example of GOAP (Goal-Oriented Action Planning) in action.
-        return AgentInvocation
+        CoachAdvice advice = AgentInvocation
                 .create(agentPlatform, CoachAdvice.class)
                 .invoke(new UserInput(req.topic(), Instant.now()));
+
+        // Phase 6: keyword-level output safety check.
+        // Throws UnsafeOutputException → GuardrailExceptionHandler → HTTP 422.
+        if (guardrailEnabled) {
+            outputModerator.check(advice);
+        }
+
+        return advice;
     }
 }

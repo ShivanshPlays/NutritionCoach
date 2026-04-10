@@ -3,12 +3,21 @@ package com.nutritioncoach.api;
 import com.embabel.agent.api.invocation.AgentInvocation;
 import com.embabel.agent.core.AgentPlatform;
 import com.embabel.agent.domain.io.UserInput;
+import com.nutritioncoach.agent.CoachAgent;
+import com.nutritioncoach.guardrail.OutputModerator;
+import com.nutritioncoach.guardrail.RateLimiter;
+import com.nutritioncoach.guardrail.UnsafeOutputException;
 import com.nutritioncoach.model.CoachAdvice;
+import com.nutritioncoach.model.CriticScore;
 import com.nutritioncoach.model.ResearchBrief;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -85,12 +94,29 @@ import java.time.Instant;
 @RequestMapping("/api")
 public class FullAdviceController {
 
+    private static final Logger log = LoggerFactory.getLogger(FullAdviceController.class);
+
+    // CriticAgent score threshold: if score < this, retry the coaching step.
+    // Book ref: Chapter 28 — Writing LLM Evals (threshold-based retry)
+    private static final int CRITIC_THRESHOLD = 40;
+
     // Embabel runtime bean — same as in CoachController and ResearchController.
     // MERN analogy: const mastra = new Mastra({ agents: [...] })
     private final AgentPlatform agentPlatform;
 
-    public FullAdviceController(AgentPlatform agentPlatform) {
+    // Phase 6: guardrail components
+    private final OutputModerator outputModerator;
+    private final RateLimiter rateLimiter;
+    private final boolean guardrailEnabled;
+
+    public FullAdviceController(AgentPlatform agentPlatform,
+                                OutputModerator outputModerator,
+                                RateLimiter rateLimiter,
+                                @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled) {
         this.agentPlatform = agentPlatform;
+        this.outputModerator = outputModerator;
+        this.rateLimiter = rateLimiter;
+        this.guardrailEnabled = guardrailEnabled;
     }
 
     // -- POST /api/full-advice -----------------------------------------------
@@ -107,7 +133,13 @@ public class FullAdviceController {
      * @return structured CoachAdvice JSON produced by the full pipeline
      */
     @PostMapping("/full-advice")
-    public CoachAdvice fullAdvice(@RequestBody @Valid FullAdviceRequest req) {
+    public CoachAdvice fullAdvice(@RequestBody @Valid FullAdviceRequest req,
+                                  @RequestHeader(value = "X-User-Id", defaultValue = CoachAgent.DEFAULT_USER_ID) String userId) {
+
+        // Phase 6: rate limit check before any LLM work.
+        if (guardrailEnabled) {
+            rateLimiter.check(userId);
+        }
 
         // ── Step 1: Research phase ─────────────────────────────────────────
         // Embabel runs ResearchAgent.gatherFacts() because it is the only
@@ -118,12 +150,57 @@ public class FullAdviceController {
                 .create(agentPlatform, ResearchBrief.class)
                 .invoke(new UserInput(req.topic(), Instant.now()));
 
-        // ── Step 2: Coaching phase ─────────────────────────────────────────
-        // Pass the ResearchBrief as the initial world state.  Embabel's GOAP
-        // planner sees ResearchBrief=TRUE, CoachAdvice=FALSE and selects
-        // CoachAgent.coachFromResearch automatically.
+        // ── Step 2: Coaching phase with CriticAgent retry loop ────────────
+        // Phase 6 adds: run CriticAgent after coaching; if score < threshold,
+        // retry the coaching step once.
         //
-        // MERN analogy: const advice = await coachAgent.generate(brief)
+        // Book ref: Chapter 28 — Writing LLM Evals
+        //   "Set a threshold and use the CriticScore to gate, retry, or escalate."
+        //
+        // MERN analogy:
+        //   const advice = await coachAgent.generate(brief)
+        //   const score  = await criticAgent.generate(advice)
+        //   if (!score.safe || score.score < THRESHOLD) {
+        //     const retried = await coachAgent.generate(brief)  // retry once
+        //   }
+        CoachAdvice advice = runCoachStep(brief);
+
+        if (guardrailEnabled) {
+            CriticScore criticScore = AgentInvocation
+                    .create(agentPlatform, CriticScore.class)
+                    .invoke(advice);
+
+            log.info("CriticAgent score={} safe={} feedback='{}'",
+                    criticScore.score(), criticScore.safe(), criticScore.feedback());
+
+            if (!criticScore.safe()) {
+                // Unsafe content detected by the LLM judge — throw immediately.
+                // OutputModerator is a keyword check; CriticAgent is the semantic check.
+                throw new UnsafeOutputException(
+                        "CriticAgent flagged unsafe content: " + criticScore.feedback());
+            }
+
+            if (criticScore.score() < CRITIC_THRESHOLD) {
+                // Quality below threshold — retry the coaching step once.
+                log.warn("CriticAgent score {} below threshold {}; retrying coaching step",
+                        criticScore.score(), CRITIC_THRESHOLD);
+                advice = runCoachStep(brief);
+            }
+
+            // Final output moderation (keyword-level) as last line of defence.
+            outputModerator.check(advice);
+        }
+
+        return advice;
+    }
+
+    /**
+     * Run CoachAgent.coachFromResearch against the given brief.
+     * Extracted to avoid duplicating the AgentInvocation call for retry.
+     *
+     * MERN analogy: const runCoachStep = (brief) => coachAgent.generate(brief)
+     */
+    private CoachAdvice runCoachStep(ResearchBrief brief) {
         return AgentInvocation
                 .create(agentPlatform, CoachAdvice.class)
                 .invoke(brief);

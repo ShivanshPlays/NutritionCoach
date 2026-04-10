@@ -145,7 +145,23 @@ app:
     memory:
       window-size: 8                  # Book ref: Ch 7 -- short-term memory window
   guardrail:
-    enabled: false                    # Book ref: Ch 9 -- enable in Phase 6
+    # Phase 6: set to true to enable all guardrails (input sanitisation,
+    # API key auth, rate limiting, output moderation, CriticAgent retry).
+    # In dev, keep true and use the default api-key below.
+    # Book ref: Chapter 9 — Middleware & Guardrails
+    enabled: true
+    # API key required in X-Api-Key header.  Set NUTRITION_API_KEY env var in prod.
+    # MERN analogy: process.env.API_KEY in a Next.js middleware.ts file.
+    api-key: ${NUTRITION_API_KEY:dev-key}
+    rate-limit:
+      # Max requests per userId per 60-second rolling window.
+      # Book ref: Chapter 9 — rate limiting protects against LLM cost runaway.
+      requests-per-minute: 10
+    critic:
+      # CriticAgent score threshold: scores below this trigger a coaching retry.
+      # Book ref: Chapter 28 — Writing LLM Evals (threshold-based retry loop).
+      score-threshold: 40
+      max-retries: 1
 
 # ── Logging ───────────────────────────────────────────────────────────────
 logging:

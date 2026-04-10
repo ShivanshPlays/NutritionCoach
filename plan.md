@@ -251,14 +251,23 @@ CREATE TABLE agent_note (
 
 ---
 
-### Phase 6 — Guardrails & Safety
+### Phase 6 — Guardrails & Safety ✅
 *Goal: prevent unsafe, low-quality, or injected output.*
 
-- [ ] Input sanitisation filter (strip prompt injection patterns)
-- [ ] Output moderation check (flag unsafe dietary or medical claims)
-- [ ] `CriticAgent`: scores responses on groundedness and safety; triggers retry if score < threshold
-- [ ] Rate limiting per `userId` (Spring's `RateLimiter` or Bucket4j)
-- [ ] Authorization: require API key header or Spring Security basic auth
+- [x] Input sanitisation filter (`InputSanitiser` + `InputGuardrailFilter` — 11 regex patterns)
+- [x] Output moderation check (`OutputModerator` — keyword patterns: medical claims, stop-medication, low-calorie)
+- [x] `CriticAgent`: LLM-as-judge scoring (0-100) + `safe` flag; retry in `FullAdviceController` if score < 40
+- [x] Rate limiting per `userId` (`RateLimiter` — sliding-window ConcurrentHashMap, 10 req/min default)
+- [x] Authorization: `ApiKeyInterceptor` checks `X-Api-Key` header (configurable via `app.guardrail.api-key`)
+- [x] `GuardrailExceptionHandler` maps exceptions to HTTP 400/401/422/429
+- [x] Tests: `InputSanitiserTest` (12), `OutputModeratorTest` (7), `CriticAgentTest` (6), `RateLimiterTest` (6)
+- [x] `app.guardrail.enabled: true` in `application.yml`; all checks gate-able by flag
+
+Design decisions:
+- No Spring Security added (HandlerInterceptor is sufficient for single API-key auth)
+- `RateLimiter` is in-memory (resets on restart); Phase 9 can replace with Redis
+- `CriticAgent` uses Embabel GOAP: `CriticScore` goal type does not conflict with `CoachAdvice`
+- pom.xml `java.version` corrected from 25 → 21 (Temurin 21.0.3 installed)
 
 ---
 
