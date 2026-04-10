@@ -51,6 +51,19 @@ import java.util.List;
  * ══════════════════════════════════════════════════════════════════════════
  */
 @Component
+
+// How does Spring know which MemoryService to inject?
+// - In production, there is only one @Service implementing MemoryService: JpaMemoryService.
+//   Spring finds this bean and injects it into MemoryTool's constructor.
+// - In tests, you manually construct MemoryTool with your own MemoryService (e.g., InMemoryMemoryService).
+// - If there are multiple beans implementing MemoryService in the context, Spring will throw an error:
+//   "NoUniqueBeanDefinitionException: expected single matching bean but found 2".
+//   To resolve this, you can use @Primary on the default bean, or @Qualifier to specify which one to inject.
+//
+// Book ref: Chapter 7 — Memory (backing-store abstraction)
+// MERN analogy: If you have two different storage backends, you must tell your DI system which one to use.
+//
+@Component
 public class MemoryTool {
 
     // Phase 4: delegates to MemoryService (JPA-backed).

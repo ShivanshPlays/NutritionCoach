@@ -41,6 +41,8 @@ import java.util.List;
  *    on the memory abstraction, not on a specific storage technology."
  * ══════════════════════════════════════════════════════════════════════════
  */
+// This is the only @Service implementing MemoryService in production, so Spring injects it by default.
+// If you add another @Service or @Component implementing MemoryService, you must use @Primary or @Qualifier to resolve ambiguity.
 @Service
 public class JpaMemoryService implements MemoryService {
 

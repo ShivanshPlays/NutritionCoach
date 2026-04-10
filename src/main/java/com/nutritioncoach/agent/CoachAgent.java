@@ -98,6 +98,21 @@ public class CoachAgent {
     private final NutritionCalcTool nutritionCalcTool;
     private final MemoryTool memoryTool;
 
+        // MERN/Next.js analogy:
+        // In tests, you manually construct all dependencies (e.g., new MemoryTool(new InMemoryMemoryService())).
+        // In production, Spring Boot's Dependency Injection (DI) system wires up all @Component beans automatically.
+        //
+        // How does Embabel/AgentInvocation know which MemoryTool to use?
+        // - When you call AgentInvocation.create(...).invoke(...), Embabel asks Spring for the CoachAgent bean.
+        // - Spring sees CoachAgent's constructor needs WebSearchTool, NutritionCalcTool, and MemoryTool.
+        // - Spring finds the single @Component MemoryTool bean in the context.
+        // - That MemoryTool bean was itself constructed with the current MemoryService implementation (JpaMemoryService in prod).
+        //
+        // So: in production, you do NOT manually instantiate CoachAgent or MemoryTool. Spring wires everything up using the beans defined in your config.
+        // In tests, you can manually pass a test double (InMemoryMemoryService) to MemoryTool for isolation and speed.
+        //
+        // Book ref: Chapter 7 — Memory (backing-store abstraction)
+
     public CoachAgent(WebSearchTool webSearchTool,
                       NutritionCalcTool nutritionCalcTool,
                       MemoryTool memoryTool) {
@@ -105,6 +120,9 @@ public class CoachAgent {
         this.nutritionCalcTool = nutritionCalcTool;
         this.memoryTool = memoryTool;
     }
+
+        // In production, this constructor is called by Spring with beans from the application context.
+        // In tests, you call it directly with your own tool/test double instances.
 
     /**
      * Collect context from tools, then ask the LLM to synthesise personalised advice.
