@@ -70,10 +70,10 @@ It is updated after every task that maps to a chapter.
 
 | Ch | Title | Core concept | MERN/JS equivalent | Status | Implementing files | Notes |
 |---|---|---|---|---|---|---|
-| 17 | RAG — Chunking & Ingestion | Breaking documents into searchable pieces | LangChain.js `RecursiveCharacterTextSplitter` | 📋 | *(Phase 10)* | `DocumentIngestionService` with configurable chunk size |
-| 18 | RAG — Embedding & Indexing | Converting text to vectors; storing in a vector DB | `@ai-sdk/google` `embed()`; Pinecone / pgvector | 📋 | *(Phase 10)* | Spring AI `EmbeddingClient` + `PgVectorStore` |
-| 19 | RAG — Retrieval & Reranking | Top-K similarity search; reranking; query rewriting | LangChain.js retriever; Mastra `vectorQueryTool` | 📋 | *(Phase 10)* | `RetrievalTool` wraps `PgVectorStore.similaritySearch()` |
-| 20 | RAG — Synthesis | Injecting retrieved context into a prompt; grounding | Mastra RAG pipeline end-to-end | 📋 | *(Phase 10)* | Context injected into `ResearchAgent` prompt at call time |
+| 17 | RAG — Chunking & Ingestion | Breaking documents into searchable pieces | LangChain.js `RecursiveCharacterTextSplitter` | ✅ | [DocumentIngestionService.java](src/main/java/com/nutritioncoach/rag/DocumentIngestionService.java), [IngestController.java](src/main/java/com/nutritioncoach/api/IngestController.java), [DocumentIngestionServiceTest.java](src/test/java/com/nutritioncoach/rag/DocumentIngestionServiceTest.java) | Phase 10: `TokenTextSplitter` (800 tokens/chunk); `POST /api/ingest` + `/batch`; `IngestResult(docName, chunkCount)` returned |
+| 18 | RAG — Embedding & Indexing | Converting text to vectors; storing in a vector DB | `@ai-sdk/google` `embed()`; Pinecone / pgvector | ✅ | [KeywordEmbeddingModel.java](src/main/java/com/nutritioncoach/rag/KeywordEmbeddingModel.java), [VectorStoreConfig.java](src/main/java/com/nutritioncoach/config/VectorStoreConfig.java) | Phase 10: `KeywordEmbeddingModel` (384-dim bag-of-words, L2-normalised, no API calls); `SimpleVectorStore` via `VectorStoreConfig`; pgvector switch documented in comments |
+| 19 | RAG — Retrieval & Reranking | Top-K similarity search; reranking; query rewriting | LangChain.js retriever; Mastra `vectorQueryTool` | ✅ | [RetrievalTool.java](src/main/java/com/nutritioncoach/rag/RetrievalTool.java), [RetrievalToolTest.java](src/test/java/com/nutritioncoach/rag/RetrievalToolTest.java) | Phase 10: `VectorStore.similaritySearch(SearchRequest)` top-5; results joined by `---`; `noOp()` factory for unit tests; timed via `AgentMetricsService.timedTool()` |
+| 20 | RAG — Synthesis | Injecting retrieved context into a prompt; grounding | Mastra RAG pipeline end-to-end | ✅ | [ResearchAgent.java](src/main/java/com/nutritioncoach/agent/ResearchAgent.java) | Phase 10: `── RETRIEVED CONTEXT ──` section injected into `ResearchAgent.gatherFacts()` prompt; empty store handled gracefully ("No documents ingested yet"); LLM instructed to prefer retrieved facts |
 
 ---
 

@@ -1426,6 +1426,258 @@
           ]
         }
       ]
+    },
+    {
+      "name": "08 - RAG Ingest (Phase 10)",
+      "id": "47029495-rag1-0000-0001-000000000010",
+      "item": [
+        {
+          "name": "POST /api/ingest \u2014 single document happy path",
+          "id": "47029495-rag1-0000-0002-000000000010",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has docName and chunkCount', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('docName');",
+                  "    pm.expect(json).to.have.property('chunkCount');",
+                  "});",
+                  "",
+                  "pm.test('docName matches request', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.docName).to.equal('omega3-guide');",
+                  "});",
+                  "",
+                  "pm.test('chunkCount is a positive integer', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.chunkCount).to.be.a('number');",
+                  "    pm.expect(json.chunkCount).to.be.greaterThan(0);",
+                  "});"
+                ],
+                "id": "47029495-rag1-0000-0003-000000000010"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"docName\": \"omega3-guide\",\n  \"content\": \"Omega-3 fatty acids are polyunsaturated fatty acids essential to human health. The three most important types are EPA (eicosapentaenoic acid), DHA (docosahexaenoic acid), and ALA (alpha-linolenic acid). EPA and DHA are primarily found in fatty fish such as salmon, mackerel, and sardines. Health benefits include reduced cardiovascular risk, improved brain function, and anti-inflammatory effects. Recommended dosage for adults is 250-500mg EPA+DHA per day.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/ingest",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ingest"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK \u2014 document ingested",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"docName\":\"omega3-guide\",\"content\":\"Omega-3 fatty acids...\"}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/ingest",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "ingest"
+                  ]
+                }
+              },
+              "body": "{\"docName\": \"omega3-guide\", \"chunkCount\": 1}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/ingest \u2014 missing docName (400)",
+          "id": "47029495-rag1-0000-0004-000000000010",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400 for missing docName', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "id": "47029495-rag1-0000-0005-000000000010"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"docName\": \"\",\n  \"content\": \"Some content here.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/ingest",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ingest"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/ingest/batch \u2014 multiple documents",
+          "id": "47029495-rag1-0000-0006-000000000010",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array with 2 results', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.be.an('array').with.lengthOf(2);",
+                  "});",
+                  "",
+                  "pm.test('Each result has docName and chunkCount', () => {",
+                  "    const json = pm.response.json();",
+                  "    json.forEach(result => {",
+                  "        pm.expect(result).to.have.property('docName');",
+                  "        pm.expect(result).to.have.property('chunkCount');",
+                  "        pm.expect(result.chunkCount).to.be.greaterThan(0);",
+                  "    });",
+                  "});"
+                ],
+                "id": "47029495-rag1-0000-0007-000000000010"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"docName\": \"vitamin-d-guide\",\n    \"content\": \"Vitamin D is a fat-soluble vitamin produced by the skin upon sun exposure. It supports calcium absorption, bone health, and immune function. Deficiency is common in northern latitudes. Recommended daily intake is 600-800 IU for adults, with therapeutic doses up to 4000 IU under medical supervision.\"\n  },\n  {\n    \"docName\": \"magnesium-guide\",\n    \"content\": \"Magnesium is an essential mineral involved in over 300 enzymatic reactions. It supports muscle contraction, nerve signalling, blood sugar regulation, and protein synthesis. Good sources include dark leafy greens, nuts, seeds, and dark chocolate. Deficiency is linked to muscle cramps, anxiety, and poor sleep quality.\"\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/ingest/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "ingest",
+                "batch"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK \u2014 batch ingested",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "[{\"docName\":\"vitamin-d-guide\",...},...]"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/ingest/batch",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "ingest",
+                    "batch"
+                  ]
+                }
+              },
+              "body": "[{\"docName\": \"vitamin-d-guide\", \"chunkCount\": 1}, {\"docName\": \"magnesium-guide\", \"chunkCount\": 1}]"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

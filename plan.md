@@ -344,22 +344,40 @@ Design decisions:
 
 ---
 
-### Phase 10 — RAG (Document-backed Knowledge)
+### Phase 10 — RAG (Document-backed Knowledge) ✅
 *Goal: answer questions grounded in uploaded nutrition docs or notes.*
 
-- [ ] Switch from H2 to PostgreSQL + add `pgvector` extension
-- [ ] Add Spring AI vector store support (`PgVectorStore`)
-- [ ] Create `DocumentIngestionService`:
-  - Accept plain-text / PDF bytes
-  - Chunk → embed (using Gemini embedding model or a local model)
-  - Store vectors in pgvector table
-- [ ] Create `RetrievalTool` that fetches top-K relevant chunks for a query
-- [ ] Wire retrieval context into `ResearchAgent` prompts
-- [ ] Add `POST /api/ingest` endpoint for document upload
+- [x] Implement RAG complexity level 1: plain-text storage with bag-of-words keyword embedding
+  - `KeywordEmbeddingModel` — 384-dim bag-of-words, L2-normalised; no API calls; swappable for real embeddings
+  - `VectorStoreConfig` — creates `SimpleVectorStore` bean (in-memory; swappable for PgVectorStore in Phase 15)
+- [x] Create `DocumentIngestionService`:
+  - Accept plain-text content via REST body
+  - Chunk with Spring AI `TokenTextSplitter` (800 tokens, 350 min chunk size)
+  - Embed + store via `VectorStore.add()`
+  - Returns `IngestResult(docName, chunkCount)`
+- [x] Create `RetrievalTool` — `VectorStore.similaritySearch(SearchRequest)`, returns top-5 chunks joined by `---`
+  - `noOp()` factory for unit tests (same pattern as AgentMetricsService.noOp())
+  - `@Autowired` on primary constructor (same pattern as CoachAgent)
+- [x] Wire `RetrievalTool` into `ResearchAgent`:
+  - Added `@Autowired` 2-arg constructor (`RetrievalTool`, `AgentMetricsService`)
+  - Added no-arg fallback constructor (`RetrievalTool.noOp()` + `AgentMetricsService.noOp()`) so existing tests still work
+  - `gatherFacts()` calls `retrievalTool.retrieveContext(topic)` via `agentMetrics.timedTool()` before the LLM call
+  - Injected as labelled `── RETRIEVED CONTEXT ──` section in the prompt
+- [x] Add REST endpoints:
+  - `POST /api/ingest` — ingest a single plain-text document
+  - `POST /api/ingest/batch` — ingest multiple documents in one call
+- [x] 19 new tests: `DocumentIngestionServiceTest` (8) + `RetrievalToolTest` (11 incl. KeywordEmbeddingModel unit tests)
+- [x] 113/113 tests passing
+
+Design decisions:
+- **No PostgreSQL switch** (deferred to Phase 15 with Docker/Compose): H2 continues as JPA datasource; `SimpleVectorStore` is the vector backend
+- **Bag-of-words embedding instead of Gemini text-embedding-004**: avoids endpoint path complexity, quota usage in CI, and external dependency for tests; same architecture lesson
+- **Switching comments in code**: `VectorStoreConfig` and `KeywordEmbeddingModel` include exact YAML config and code changes to swap for `PgVectorStore` + real embeddings
+- **Phase 10 RAG complexity ladder**: level 1 ✅ (keyword); level 2 (pgvector + real embedding) → Phase 15; level 3 (reranking) + level 4 (query rewriting) → post-Phase 15
 
 **Phases of RAG complexity:**
-1. Plain-text storage with keyword search (start here)
-2. Add pgvector + embeddings
+1. Plain-text storage with keyword search ✅ (this phase)
+2. Add pgvector + real embeddings (Phase 15)
 3. Add reranking pass
 4. Agent-driven query rewriting
 

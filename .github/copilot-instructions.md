@@ -60,6 +60,16 @@ mirrors the book's conceptual progression.
 Follow the Implementation Discipline principle: only add what is needed for the
 current phase.  No premature abstractions, no speculative features.
 
+### 8 — NEVER remove protected pedagogical comments
+Certain comments in the codebase are marked with a `[DO-NOT-REMOVE: <IDENTIFIER>]` /
+`[END DO-NOT-REMOVE: <IDENTIFIER>]` block tag. These are **permanent learning annotations**
+and MUST NOT be deleted, truncated, or moved in any refactor, phase upgrade, or cleanup.
+The identifier acts as a unique key — do not alter it.
+
+Current protected identifiers:
+- `COSINE-DRY-RUN` — in `KeywordEmbeddingModel.java`: mathematical dry run of
+  cosine/dot-product similarity used for RAG retrieval scoring.
+
 ### 7 — Maintain the Postman test suite in sync
 The collection and environment live in `postman/` — exactly **two files**:
 - `postman/47029495-4f94b12c-c40e-473e-abb7-68094b25f361.json`  ← collection (Postman auto-syncs this file using the `_postman_id` as filename)

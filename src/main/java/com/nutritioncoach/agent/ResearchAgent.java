@@ -6,6 +6,9 @@ import com.embabel.agent.api.annotation.Agent;
 import com.embabel.agent.api.common.Ai;
 import com.embabel.agent.domain.io.UserInput;
 import com.nutritioncoach.model.ResearchBrief;
+import com.nutritioncoach.observability.AgentMetricsService;
+import com.nutritioncoach.rag.RetrievalTool;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -73,6 +76,37 @@ import com.nutritioncoach.model.ResearchBrief;
 @Agent(description = "Research a nutrition topic and produce a structured ResearchBrief with key findings, risks, and follow-up questions")
 public class ResearchAgent {
 
+    // ── Phase 10: RAG retrieval — injected to pre-fetch grounding context ──
+    // MERN analogy: const retrieval = useRetrieval() injected into the agent handler.
+    // Book ref: Chapter 20 — RAG: Synthesis
+    //   "Inject retrieved context in a clearly labelled section of the prompt."
+    private final RetrievalTool retrievalTool;
+
+    // ── Phase 9: Observability — wraps retrieval call with timing + MDC ───
+    private final AgentMetricsService agentMetrics;
+
+    /**
+     * Spring-managed constructor — wires real RetrievalTool + AgentMetricsService.
+     * @Autowired needed because this class now has two constructors.
+     * MERN analogy: constructor-injected deps in a NestJS @Injectable() service.
+     */
+    @Autowired
+    public ResearchAgent(RetrievalTool retrievalTool, AgentMetricsService agentMetrics) {
+        this.retrievalTool = retrievalTool;
+        this.agentMetrics = agentMetrics;
+    }
+
+    /**
+     * Test-friendly no-arg constructor — uses no-op stubs so existing
+     * ResearchAgentTest can call {@code new ResearchAgent()} without wiring
+     * a VectorStore or MeterRegistry.
+     * MERN analogy: default-exporting a factory where retrieval + metrics
+     *   default to jest no-ops when omitted.
+     */
+    public ResearchAgent() {
+        this(RetrievalTool.noOp(), AgentMetricsService.noOp());
+    }
+
     /**
      * Single action: take the user's raw topic text and produce a typed
      * ResearchBrief via a structured LLM call.
@@ -97,11 +131,42 @@ public class ResearchAgent {
     @AchievesGoal(description = "Produce a structured ResearchBrief for the given nutrition topic")
     @Action
     public ResearchBrief gatherFacts(UserInput userInput, Ai ai) {
-        // ai.withDefaultLlm() uses the model set in embabel.models.default-llm
-        // (see application.yml). For us that is gemini-2.5-flash via
-        // Google AI Studio's OpenAI-compatible endpoint.
+        String topic = userInput.getContent();
+
+        // ── Phase 10: RAG retrieval — fetch grounding context before LLM call ──
         //
-        // .createObject() = structured output.  Embabel inspects ResearchBrief
+        // Pre-fetch pattern: Java explicitly calls the tool, then injects the
+        // result into the prompt.  Same pattern used in CoachAgent (Phase 3).
+        //
+        // When the VectorStore is empty (no documents ingested yet), retrieveContext()
+        // returns "" — the prompt section becomes empty but the LLM still works.
+        //
+        // Phase 9: timedTool() wraps retrieval with Micrometer timer + MDC.
+        // Book ref: Chapter 19 — RAG: Retrieval & Reranking
+        //   "At retrieval time, query with the same embedding model used at
+        //    ingestion time — mismatched models destroy similarity scores."
+        //
+        // MERN analogy:
+        //   const context = await retrievalTool.retrieveContext(topic)
+        String retrievedContext = agentMetrics.timedTool(
+                "RetrievalTool.retrieveContext",
+                AgentMetricsService.hashInput(topic),
+                () -> retrievalTool.retrieveContext(topic));
+
+        // Decide what to show in the context section of the prompt.
+        // If no docs were ingested, we tell the model explicitly so it doesn't
+        // hallucinate a retrieval source.
+        String ragSection = retrievedContext.isBlank()
+                ? "No documents have been ingested yet. Base your research on general knowledge."
+                : retrievedContext;
+
+        // ── LLM call with enriched prompt ─────────────────────────────────
+        //
+        // The ── RETRIEVED CONTEXT ── section is the RAG synthesis step.
+        // The model is instructed to PREFER retrieved facts over general knowledge,
+        // which reduces hallucination when documents are available.
+        //
+        // .createObject() = structured output. Embabel inspects ResearchBrief
         // via reflection, builds a JSON schema, appends format instructions to
         // the prompt, calls the LLM, and deserialises the response.
         // Exactly equivalent to Spring AI's .call().entity(ResearchBrief.class)
@@ -110,6 +175,9 @@ public class ResearchAgent {
         // Book ref: Chapter 5 — Structured Output
         //   Structured output makes agentic pipelines reliable; open text makes
         //   downstream parsing fragile.
+        // Book ref: Chapter 20 — RAG: Synthesis
+        //   "Inject retrieved context in a clearly labelled section of the prompt
+        //    so the model knows exactly which facts to use."
         return ai
                 .withDefaultLlm()
                 .createObject("""
@@ -117,14 +185,23 @@ public class ResearchAgent {
                         Research the following nutrition topic thoroughly and provide a
                         comprehensive, evidence-based analysis.
 
-                        Topic: %s
+                        ── TOPIC ───────────────────────────────────────────────────────────────────
+                        %s
+
+                        ── RETRIEVED CONTEXT (from ingested documents) ───────────────────
+                        %s
+
+                        ── INSTRUCTIONS ─────────────────────────────────────────────────────────
+                        When retrieved context is available, PREFER those facts over general
+                        knowledge. Clearly synthesise findings from the retrieved documents.
+                        When no context is provided, use evidence-based general knowledge.
 
                         Your response must include:
                         - Key nutritional findings (scientific facts, mechanisms, benefits)
                         - Potential risks or contraindications (side effects, interactions,
                           populations that should avoid it)
                         - Suggested follow-up questions for deeper investigation
-                        """.formatted(userInput.getContent()),
+                        """.formatted(topic, ragSection),
                         ResearchBrief.class);
     }
 }
