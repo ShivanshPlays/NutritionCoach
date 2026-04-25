@@ -1140,6 +1140,244 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "07 - Route Advice (POST /api/route-advice)",
+      "item": [
+        {
+          "name": "POST /api/route-advice \u2014 FREE tier (single-step)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has routing metadata', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('advice');",
+                  "    pm.expect(json).to.have.property('tier', 'FREE');",
+                  "    pm.expect(json).to.have.property('route', 'SINGLE_STEP');",
+                  "    pm.expect(json).to.have.property('model');",
+                  "});",
+                  "pm.test('Advice has required fields', () => {",
+                  "    const { advice } = pm.response.json();",
+                  "    pm.expect(advice).to.have.property('summary').that.is.a('string');",
+                  "    pm.expect(advice).to.have.property('actionItems').that.is.an('array');",
+                  "    pm.expect(advice).to.have.property('weeklyGoal').that.is.a('string');",
+                  "    pm.expect(advice).to.have.property('disclaimer').that.is.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "postman-free-user"
+              },
+              {
+                "key": "X-User-Tier",
+                "value": "FREE"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"topic\": \"protein tips\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-advice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "route-advice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/route-advice \u2014 PREMIUM tier long query (full-pipeline)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('PREMIUM long query routes to FULL_PIPELINE', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.tier).to.equal('PREMIUM');",
+                  "    pm.expect(json.route).to.equal('FULL_PIPELINE');",
+                  "    pm.expect(json.model).to.be.a('string').and.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "postman-premium-user"
+              },
+              {
+                "key": "X-User-Tier",
+                "value": "PREMIUM"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"topic\": \"What evidence supports intermittent fasting for fat loss and lean muscle retention in recreational athletes?\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-advice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "route-advice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/route-advice \u2014 PREMIUM tier short query (single-step)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('PREMIUM short query routes to SINGLE_STEP', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.tier).to.equal('PREMIUM');",
+                  "    pm.expect(json.route).to.equal('SINGLE_STEP');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "postman-premium-user"
+              },
+              {
+                "key": "X-User-Tier",
+                "value": "PREMIUM"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"topic\": \"magnesium sleep\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-advice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "route-advice"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/route-advice \u2014 invalid tier defaults to FREE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Unknown tier falls back to FREE routing', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.tier).to.equal('FREE');",
+                  "    pm.expect(json.route).to.equal('SINGLE_STEP');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "X-User-Tier",
+                "value": "ULTRA_SUPER_TIER"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"topic\": \"zinc dosage\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/route-advice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "route-advice"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 \u2014 Unknown tier falls back to FREE",
+              "status": "OK",
+              "code": 200,
+              "body": "{\"advice\":{...},\"tier\":\"FREE\",\"route\":\"SINGLE_STEP\",\"model\":\"gemini-2.0-flash\"}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

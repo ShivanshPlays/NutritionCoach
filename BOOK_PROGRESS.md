@@ -47,7 +47,7 @@ It is updated after every task that maps to a chapter.
 
 | Ch | Title | Core concept | MERN/JS equivalent | Status | Implementing files | Notes |
 |---|---|---|---|---|---|---|
-| 8 | Dynamic Agents | Changing instructions, tools, or model at runtime based on context/user tier | Mastra conditional tool lists; runtime `instructions` override | 📋 | *(Phase 7)* | `AgentRouter` will switch model + tool set based on `UserTier` |
+| 8 | Dynamic Agents | Changing instructions, tools, or model at runtime based on context/user tier | Mastra conditional tool lists; runtime `instructions` override | ✅ | [AgentRouter.java](src/main/java/com/nutritioncoach/agent/AgentRouter.java), [RouteAdviceController.java](src/main/java/com/nutritioncoach/api/RouteAdviceController.java), [UserTier.java](src/main/java/com/nutritioncoach/model/UserTier.java), [RouteAdviceResponse.java](src/main/java/com/nutritioncoach/model/RouteAdviceResponse.java), [AgentRouterTest.java](src/test/java/com/nutritioncoach/agent/AgentRouterTest.java) | Phase 7: `AgentRouter` classifies query complexity + tier → selects SINGLE_STEP or FULL_PIPELINE path; model names read from `app.agent.model.*` config; actual per-request Embabel model switching deferred to Phase 11 |
 | 9 | Middleware & Guardrails | Input sanitisation, prompt injection detection, output moderation | Express middleware (`app.use()`); Mastra middleware hooks | ✅ | [InputSanitiser.java](src/main/java/com/nutritioncoach/guardrail/InputSanitiser.java), [InputGuardrailFilter.java](src/main/java/com/nutritioncoach/guardrail/InputGuardrailFilter.java), [OutputModerator.java](src/main/java/com/nutritioncoach/guardrail/OutputModerator.java), [RateLimiter.java](src/main/java/com/nutritioncoach/guardrail/RateLimiter.java), [ApiKeyInterceptor.java](src/main/java/com/nutritioncoach/guardrail/ApiKeyInterceptor.java), [CriticAgent.java](src/main/java/com/nutritioncoach/agent/CriticAgent.java), [GuardrailExceptionHandler.java](src/main/java/com/nutritioncoach/api/GuardrailExceptionHandler.java) | Phase 6: `OncePerRequestFilter` for injection detection; `HandlerInterceptor` for API-key auth; `OutputModerator` for keyword safety; `CriticAgent` for LLM-as-judge semantic gating; `RateLimiter` sliding-window per userId |
 | 10 | Third-Party Tools & Integrations | Wrapping external APIs as agent-callable tools | Mastra community tools (`@mastra/tools`) | � | [WebSearchTool.java](src/main/java/com/nutritioncoach/tool/WebSearchTool.java) | `WebSearchTool` stub wraps a simulated search API; Phase 10 RAG will replace backing with real search (Brave/Tavily) or pgvector retrieval |
 | 11 | Model Context Protocol (MCP) | Standard interface for connecting agents to tool servers | MCP SDK for Node.js; `@mastra/mcp` | 📋 | *(Phase 14)* | Embabel can expose tools as an MCP server over SSE |
@@ -119,7 +119,7 @@ Phase 3  → Ch 6, 10      (tool calling, third-party tools)            📋
 Phase 4  → Ch 7          (memory layer)                               📋
 Phase 5  → Ch 12         (first workflow: Research → Coach)           📋
 Phase 6  → Ch 9          (guardrails & middleware)                    ✅
-Phase 7  → Ch 8          (dynamic agents / model routing)             📋
+Phase 7  → Ch 8          (dynamic agents / model routing)             ✅
 Phase 8  → LoggerAgent   (memory lifecycle agent)                     📋
 Phase 9  → Ch 13, 16     (branching workflows, observability)         📋
 Phase 10 → Ch 17-20      (RAG)                                        📋

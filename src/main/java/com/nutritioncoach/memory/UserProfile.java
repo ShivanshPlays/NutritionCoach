@@ -3,6 +3,10 @@ package com.nutritioncoach.memory;
 import jakarta.persistence.*;
 import java.time.Instant;
 
+// Phase 7: UserTier enum for dynamic agent routing.
+// MERN analogy: import { UserTier } from '@/types'
+import com.nutritioncoach.model.UserTier;
+
 /**
  * ══════════════════════════════════════════════════════════════════════════
  * UserProfile — JPA entity for long-term / semantic memory
@@ -45,6 +49,13 @@ public class UserProfile {
     @Column(columnDefinition = "TEXT")
     private String restrictions;
 
+    // Phase 7: user tier for dynamic agent routing and model selection.
+    // Stored as VARCHAR via @Enumerated(STRING); V3 migration adds the column.
+    // MERN analogy: plan: 'FREE' | 'PREMIUM' on the Prisma User model.
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16, nullable = false)
+    private UserTier tier = UserTier.FREE;
+
     @Column(name = "updated_at")
     private Instant updatedAt;
 
@@ -64,10 +75,12 @@ public class UserProfile {
     public UserProfile displayName(String name)       { this.displayName = name;  return this; }
     public UserProfile dietaryGoals(String goals)     { this.dietaryGoals = goals; return this; }
     public UserProfile restrictions(String restr)     { this.restrictions = restr; return this; }
+    public UserProfile tier(UserTier t)               { this.tier = t;            return this; }
 
     public String getUserId()       { return userId; }
     public String getDisplayName()  { return displayName; }
     public String getDietaryGoals() { return dietaryGoals; }
     public String getRestrictions() { return restrictions; }
+    public UserTier getTier()       { return tier; }
     public Instant getUpdatedAt()   { return updatedAt; }
 }

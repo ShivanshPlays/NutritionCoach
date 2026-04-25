@@ -271,16 +271,25 @@ Design decisions:
 
 ---
 
-### Phase 7 — Dynamic Agents
+### Phase 7 — Dynamic Agents ✅
 *Goal: route to different models/tools based on user tier or query type.*
 
-- [ ] Add `UserTier` enum (`FREE`, `PREMIUM`) to `UserProfile`
-- [ ] Implement `AgentRouter`:
-  - Short query → quick single-LLM answer
-  - Long/research query → full ResearchAgent → CoachAgent pipeline
-  - FREE tier → smaller Gemini model
-  - PREMIUM tier → stronger Gemini model + more tools
-- [ ] Make model name configurable via `application.yml` property
+- [x] Add `UserTier` enum (`FREE`, `PREMIUM`) to `UserProfile` (Flyway V3 migration adds `tier` column)
+- [x] Implement `AgentRouter` (`@Service`):
+  - Short query (< 80 chars) + FREE → SINGLE_STEP (CoachAgent only)
+  - Long query (≥ 80 chars) + PREMIUM → FULL_PIPELINE (ResearchAgent → CoachAgent)
+  - SHORT + PREMIUM → SINGLE_STEP (fast response for simple questions)
+  - FREE tier always → SINGLE_STEP (cost control)
+- [x] `RouteAdviceResponse` record wraps `CoachAdvice` with `tier`, `route`, `model` metadata
+- [x] `POST /api/route-advice` — new endpoint, reads `X-User-Tier` header, delegates to `AgentRouter`
+- [x] Model names configurable via `app.agent.model.free` / `app.agent.model.premium` in `application.yml`
+- [x] 11 tests in `AgentRouterTest` — 77 total passing
+
+Design decisions:
+- `AgentRouter` is `@Service`, not `@Agent`: routing logic is explicit Java, not GOAP-planned
+- `classify(topic, tier)` is package-visible (not private) to allow direct unit testing without mocking AgentPlatform
+- Model name is returned in the response for observability; actual per-request Embabel model switching deferred to Phase 11
+- `X-User-Tier` header parsing is fail-safe: unknown values default to FREE
 
 ---
 
