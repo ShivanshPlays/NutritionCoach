@@ -122,17 +122,37 @@ embabel:
     logging:
       personality: none              # disable Star Wars logging theme in dev
 
-# ── Actuator ─────────────────────────────────────────────────────────────
+# ── Actuator + Tracing — Phase 9: Observability ──────────────────────────
 # MERN analogy: like a built-in /healthz endpoint that also exposes metrics.
 # Spring Boot Actuator provides /actuator/health, /actuator/metrics, etc.
+#
+# loggers endpoint:
+#   Allows changing log levels at runtime via POST /actuator/loggers/<name>.
+#   Useful to turn on DEBUG for a specific agent in prod without restart.
+#   MERN analogy: log4js.setLevel() called from an admin endpoint.
+#
+# tracing.sampling.probability = 1.0:
+#   micrometer-tracing-bridge-brave injects traceId + spanId into MDC and
+#   into every log line automatically on each HTTP request.  Use 0.1 in prod.
+#   MERN analogy: @opentelemetry/sdk-node auto-instrumenting with AsyncLocalStorage.
+#
+# Book ref: Chapter 16 — Observability
+#   "Expose your metrics in a format your monitoring stack can scrape.
+#    /actuator/metrics gives you a quick check; add a Prometheus registry
+#    for Grafana-ready dashboards."
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,loggers
   endpoint:
     health:
       show-details: when_authorized
+    loggers:
+      enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
 
 # ── App-level config (grows per phase) ────────────────────────────────────
 # MERN analogy: a config module (config/ai.ts) that is imported by services.

@@ -7,9 +7,11 @@ import com.embabel.agent.api.common.Ai;
 import com.embabel.agent.domain.io.UserInput;
 import com.nutritioncoach.model.CoachAdvice;
 import com.nutritioncoach.model.ResearchBrief;
+import com.nutritioncoach.observability.AgentMetricsService;
 import com.nutritioncoach.tool.MemoryTool;
 import com.nutritioncoach.tool.NutritionCalcTool;
 import com.nutritioncoach.tool.WebSearchTool;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
@@ -98,6 +100,10 @@ public class CoachAgent {
     private final NutritionCalcTool nutritionCalcTool;
     private final MemoryTool memoryTool;
 
+    // Phase 9: observability — wraps each tool call with timing + structured log.
+    // MERN analogy: const metrics = useMetrics() injected into the agent handler.
+    private final AgentMetricsService agentMetrics;
+
         // MERN/Next.js analogy:
         // In tests, you manually construct all dependencies (e.g., new MemoryTool(new InMemoryMemoryService())).
         // In production, Spring Boot's Dependency Injection (DI) system wires up all @Component beans automatically.
@@ -113,16 +119,34 @@ public class CoachAgent {
         //
         // Book ref: Chapter 7 — Memory (backing-store abstraction)
 
+    @Autowired
     public CoachAgent(WebSearchTool webSearchTool,
                       NutritionCalcTool nutritionCalcTool,
-                      MemoryTool memoryTool) {
+                      MemoryTool memoryTool,
+                      AgentMetricsService agentMetrics) {
         this.webSearchTool = webSearchTool;
         this.nutritionCalcTool = nutritionCalcTool;
         this.memoryTool = memoryTool;
-    }
+   
 
         // In production, this constructor is called by Spring with beans from the application context.
         // In tests, you call it directly with your own tool/test double instances.
+        this.agentMetrics = agentMetrics;
+    }
+
+    /**
+     * Test-friendly 3-arg constructor — uses a no-op metrics service.
+     * Existing unit tests (CoachAgentTest) pass all 3 tools directly;
+     * they continue to work without a Spring context or MeterRegistry.
+     *
+     * MERN analogy: default-exporting a factory: (deps) => agent
+     *   where metrics default to a jest no-op when omitted.
+     */
+    public CoachAgent(WebSearchTool webSearchTool,
+                      NutritionCalcTool nutritionCalcTool,
+                      MemoryTool memoryTool) {
+        this(webSearchTool, nutritionCalcTool, memoryTool, AgentMetricsService.noOp());
+    }
 
     /**
      * Collect context from tools, then ask the LLM to synthesise personalised advice.
@@ -154,15 +178,24 @@ public class CoachAgent {
         String topic = userInput.getContent();
 
         // ── Step 1: gather supplementary web context (read-only) ──────────
-        String webContext = webSearchTool.searchWeb(topic);
+        // Phase 9: wrapped with timedTool() — logs tool name, input hash, latency, status.
+        // Book ref: Chapter 16 — Observability: "Log each tool call individually."
+        String webContext = agentMetrics.timedTool(
+                "WebSearchTool.searchWeb",
+                AgentMetricsService.hashInput(topic),
+                () -> webSearchTool.searchWeb(topic));
 
         // ── Step 2: calculate macro facts (read-only) ─────────────────────
-        // Use "standard serving" as default quantity; Phase 5 can parse
-        // explicit quantities from structured input.
-        String nutritionData = nutritionCalcTool.calculateNutrition(topic, "standard serving");
+        String nutritionData = agentMetrics.timedTool(
+                "NutritionCalcTool.calculateNutrition",
+                AgentMetricsService.hashInput(topic),
+                () -> nutritionCalcTool.calculateNutrition(topic, "standard serving"));
 
         // ── Step 3: retrieve existing notes for personalisation (read-only) ─
-        List<String> previousNotes = memoryTool.lookupNotes(DEFAULT_USER_ID, topic);
+        List<String> previousNotes = agentMetrics.timedTool(
+                "MemoryTool.lookupNotes",
+                AgentMetricsService.hashInput(topic),
+                () -> memoryTool.lookupNotes(DEFAULT_USER_ID, topic));
         String notesContext = previousNotes.isEmpty()
                 ? "No previous notes for this user on this topic."
                 : "Previous coaching notes:\n" + String.join("\n- ", previousNotes);
@@ -214,7 +247,10 @@ public class CoachAgent {
 
         // ── Step 5: store this coaching session in memory (mutating — done last) ─
         // MERN analogy: await db.notes.insert({ userId, content }) after the LLM call.
-        memoryTool.storeMemory(DEFAULT_USER_ID, "Coached on: " + topic);
+        agentMetrics.timedTool(
+                "MemoryTool.storeMemory",
+                AgentMetricsService.hashInput("Coached on: " + topic),
+                () -> { memoryTool.storeMemory(DEFAULT_USER_ID, "Coached on: " + topic); return null; });
 
         return advice;
     }

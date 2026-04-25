@@ -9,6 +9,7 @@ import com.nutritioncoach.guardrail.OutputModerator;
 import com.nutritioncoach.guardrail.RateLimiter;
 import com.nutritioncoach.memory.MemoryService;
 import com.nutritioncoach.model.CoachAdvice;
+import com.nutritioncoach.observability.AgentMetricsService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,18 +91,24 @@ public class CoachController {
     private final LoggerService loggerService;
     private final MemoryService memoryService;
 
+    // Phase 9: records agent-level timing and emits structured log events.
+    // MERN analogy: const metrics = useMetrics() in a Next.js route handler.
+    private final AgentMetricsService agentMetrics;
+
     public CoachController(AgentPlatform agentPlatform,
                            OutputModerator outputModerator,
                            RateLimiter rateLimiter,
                            @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled,
                            LoggerService loggerService,
-                           MemoryService memoryService) {
+                           MemoryService memoryService,
+                           AgentMetricsService agentMetrics) {
         this.agentPlatform = agentPlatform;
         this.outputModerator = outputModerator;
         this.rateLimiter = rateLimiter;
         this.guardrailEnabled = guardrailEnabled;
         this.loggerService = loggerService;
         this.memoryService = memoryService;
+        this.agentMetrics = agentMetrics;
     }
 
     // -- POST /api/coach-advice ---------------------------------------------
@@ -136,12 +143,14 @@ public class CoachController {
             rateLimiter.check(userId);
         }
 
-        // AgentInvocation.create auto-selects CoachAgent because it is the
-        // only registered agent whose @AchievesGoal produces CoachAdvice.
-        // MERN analogy: mastra.getAgent('coachAgent').generate(req.topic())
-        CoachAdvice advice = AgentInvocation
-                .create(agentPlatform, CoachAdvice.class)
-                .invoke(new UserInput(req.topic(), Instant.now()));
+        // Phase 9: wrap the AgentInvocation with timing + MDC + structured log.
+        // Book ref: Chapter 16 — Observability: "Record latency per agent action."
+        // MERN analogy: const advice = await metrics.timed('CoachAgent', 'advise', ...)
+        CoachAdvice advice = agentMetrics.timed(
+                "CoachAgent", "advise", userId, "coach-system.st",
+                () -> AgentInvocation
+                        .create(agentPlatform, CoachAdvice.class)
+                        .invoke(new UserInput(req.topic(), Instant.now())));
 
         // Phase 6: keyword-level output safety check.
         // Throws UnsafeOutputException → GuardrailExceptionHandler → HTTP 422.

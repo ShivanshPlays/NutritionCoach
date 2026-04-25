@@ -314,15 +314,33 @@ Design decisions:
 
 ---
 
-### Phase 9 — Observability
+### Phase 9 — Observability ✅
 *Goal: structured traces for every agent action and tool call.*
 
-- [ ] Add Micrometer + Spring Boot Actuator tracing
-- [ ] Emit structured log events per agent action:
-  - `agentName`, `actionName`, `userId`, `durationMs`, `status`, `promptVersion`
-- [ ] Log tool calls: tool name, input hash (not raw PII), latency, result status
-- [ ] Expose `/actuator/metrics` and `/actuator/health`
-- [ ] Optional: integrate OpenTelemetry exporter for local Jaeger or Cloud Trace
+- [x] Add `micrometer-tracing-bridge-brave` to pom.xml — injects `traceId` + `spanId` into MDC on every HTTP request
+- [x] Create `AgentMetricsService` (`@Service`, `com.nutritioncoach.observability` package):
+  - `timed(agentName, actionName, userId, promptVersion, Supplier<T>)` — Micrometer timer + MDC + structured log
+  - `timedTool(toolName, inputHash, Supplier<T>)` — per-tool Micrometer timer + structured log
+  - `hashInput(String)` — 8-char hex fingerprint of input (PII-safe logging)
+  - `noOp()` factory — returns a SimpleMeterRegistry-backed instance for unit tests
+- [x] Structured log events per agent action: `agentName`, `actionName`, `userId`, `durationMs`, `status`, `promptVersion`
+- [x] Structured log events per tool call: `toolName`, `inputHash`, `durationMs`, `status`
+- [x] Wire `AgentMetricsService` into:
+  - `CoachAgent` — wraps each tool call (`WebSearchTool`, `NutritionCalcTool`, `MemoryTool`) with `timedTool()`
+  - `CoachController` — wraps `AgentInvocation` with `timed("CoachAgent", "advise", ...)`
+  - `FullAdviceController` — wraps both `ResearchAgent` and `CoachAgent` invocations
+  - `RouteAdviceController` — wraps `agentRouter.route()` with `timed("AgentRouter", "route", ...)`
+- [x] Expose `/actuator/metrics`, `/actuator/health`, `/actuator/loggers` (runtime log-level changes)
+- [x] Tracing sampling probability set to `1.0` in `application.yml` (dev default)
+- [x] 11 unit tests in `AgentMetricsServiceTest` — 93 total passing
+
+Design decisions:
+- `AgentMetricsService.noOp()` factory avoids test-breaking constructor changes in tools; existing tool tests pass unchanged
+- MDC is always cleaned up in `finally` blocks — async (@Async) callers get their own thread-local MDC
+- `hashInput()` uses Java `hashCode()` — fast and sufficient for log correlation (book says: hash, don't encrypt)
+- Raw user input is NEVER logged; only the 8-char hash appears in log statements
+- `micrometer-tracing-bridge-brave` added so every request log line carries `traceId` automatically; Zipkin reporter left commented out (add when a collector is available)
+- Prometheus registry left as future addition (add `micrometer-registry-prometheus` + uncomment in management config)
 
 ---
 

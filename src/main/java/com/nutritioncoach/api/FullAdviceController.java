@@ -12,6 +12,7 @@ import com.nutritioncoach.memory.MemoryService;
 import com.nutritioncoach.model.CoachAdvice;
 import com.nutritioncoach.model.CriticScore;
 import com.nutritioncoach.model.ResearchBrief;
+import com.nutritioncoach.observability.AgentMetricsService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
@@ -116,18 +117,23 @@ public class FullAdviceController {
     private final LoggerService loggerService;
     private final MemoryService memoryService;
 
+    // Phase 9: agent-level observability.
+    private final AgentMetricsService agentMetrics;
+
     public FullAdviceController(AgentPlatform agentPlatform,
                                 OutputModerator outputModerator,
                                 RateLimiter rateLimiter,
                                 @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled,
                                 LoggerService loggerService,
-                                MemoryService memoryService) {
+                                MemoryService memoryService,
+                                AgentMetricsService agentMetrics) {
         this.agentPlatform = agentPlatform;
         this.outputModerator = outputModerator;
         this.rateLimiter = rateLimiter;
         this.guardrailEnabled = guardrailEnabled;
         this.loggerService = loggerService;
         this.memoryService = memoryService;
+        this.agentMetrics = agentMetrics;
     }
 
     // -- POST /api/full-advice -----------------------------------------------
@@ -153,13 +159,12 @@ public class FullAdviceController {
         }
 
         // ── Step 1: Research phase ─────────────────────────────────────────
-        // Embabel runs ResearchAgent.gatherFacts() because it is the only
-        // @AchievesGoal that produces ResearchBrief from UserInput.
-        //
-        // MERN analogy: const brief = await researchAgent.generate(topic)
-        ResearchBrief brief = AgentInvocation
-                .create(agentPlatform, ResearchBrief.class)
-                .invoke(new UserInput(req.topic(), Instant.now()));
+        // Phase 9: timed() wraps each AgentInvocation with durationMs + MDC.
+        ResearchBrief brief = agentMetrics.timed(
+                "ResearchAgent", "gatherFacts", userId, "research-system.st",
+                () -> AgentInvocation
+                        .create(agentPlatform, ResearchBrief.class)
+                        .invoke(new UserInput(req.topic(), Instant.now())));
 
         // ── Step 2: Coaching phase with CriticAgent retry loop ────────────
         // Phase 6 adds: run CriticAgent after coaching; if score < threshold,

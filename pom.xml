@@ -162,6 +162,39 @@
             <version>${embabel-agent.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- ── Phase 9: Observability — Micrometer distributed tracing ──────── -->
+        <!--                                                                      -->
+        <!-- micrometer-tracing-bridge-brave: integrates Brave (the tracing      -->
+        <!--   library behind Zipkin) with Micrometer Tracing.  This adds        -->
+        <!--   traceId + spanId to MDC automatically on every request so every   -->
+        <!--   log statement in a request carries the same correlation ID.        -->
+        <!--                                                                      -->
+        <!-- MERN analogy: @opentelemetry/sdk-node / dd-trace initialised at     -->
+        <!--   app startup — wraps each request with a trace context that all    -->
+        <!--   loggers can read via AsyncLocalStorage.                            -->
+        <!--                                                                      -->
+        <!-- Book ref: Chapter 16 — Observability                                -->
+        <!--   "Every agent action should carry a trace ID so you can follow a   -->
+        <!--    single request from HTTP entry point through every LLM call."    -->
+        <!--                                                                      -->
+        <!-- Version is managed by the Spring Boot parent BOM — no explicit      -->
+        <!-- version needed.                                                      -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-brave</artifactId>
+        </dependency>
+
+        <!-- Optional: Zipkin reporter — enables sending traces to a local       -->
+        <!-- Zipkin server (run: docker run -p 9411:9411 openzipkin/zipkin).     -->
+        <!-- Uncomment when you want distributed tracing in a running server.    -->
+        <!-- MERN analogy: configuring the OTel exporter to send to Jaeger.      -->
+        <!--
+        <dependency>
+            <groupId>io.zipkin.reporter2</groupId>
+            <artifactId>zipkin-reporter-brave</artifactId>
+        </dependency>
+        -->
     </dependencies>
 
     <build>

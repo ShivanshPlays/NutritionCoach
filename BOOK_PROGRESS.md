@@ -62,7 +62,7 @@ It is updated after every task that maps to a chapter.
 | 13 | Workflows — Branching | Conditional paths, parallel branches, merge | Mastra `branch()`, `parallel()` | 📋 | *(Phase 9)* | PlannerAgent will drive branching |
 | 14 | Workflows — Suspend & Resume | Long-running workflows that pause for human input or async events | Mastra `suspend()` / `resume()` | ⏳ | — | Deferred; requires durable execution support |
 | 15 | Streaming | Token-by-token SSE output from the model to the client | Vercel AI SDK `streamText()`; `useChat` hook | 📋 | *(Phase 12)* | `ChatClient.stream()` → SSE endpoint |
-| 16 | Observability | Traces, step-level logs, timing, prompt version tracking | Mastra `telemetry` config; OpenTelemetry | 📋 | *(Phase 9)* | Micrometer + structured per-action log events |
+| 16 | Observability | Traces, step-level logs, timing, prompt version tracking | Mastra `telemetry` config; OpenTelemetry | ✅ | [AgentMetricsService.java](src/main/java/com/nutritioncoach/observability/AgentMetricsService.java), [CoachAgent.java](src/main/java/com/nutritioncoach/agent/CoachAgent.java), [CoachController.java](src/main/java/com/nutritioncoach/api/CoachController.java), [FullAdviceController.java](src/main/java/com/nutritioncoach/api/FullAdviceController.java), [RouteAdviceController.java](src/main/java/com/nutritioncoach/api/RouteAdviceController.java), [AgentMetricsServiceTest.java](src/test/java/com/nutritioncoach/observability/AgentMetricsServiceTest.java) | Phase 9: `AgentMetricsService` wraps every agent action and tool call with Micrometer timers + MDC + structured log events; `micrometer-tracing-bridge-brave` adds traceId/spanId to every log line; `/actuator/metrics` and `/actuator/loggers` exposed; `hashInput()` ensures no raw PII in logs |
 
 ---
 

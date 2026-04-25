@@ -6,6 +6,7 @@ import com.nutritioncoach.guardrail.OutputModerator;
 import com.nutritioncoach.guardrail.RateLimiter;
 import com.nutritioncoach.model.RouteAdviceResponse;
 import com.nutritioncoach.model.UserTier;
+import com.nutritioncoach.observability.AgentMetricsService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,14 +88,19 @@ public class RouteAdviceController {
     private final OutputModerator outputModerator;
     private final boolean guardrailEnabled;
 
+    // Phase 9: observability.
+    private final AgentMetricsService agentMetrics;
+
     public RouteAdviceController(AgentRouter agentRouter,
                                  RateLimiter rateLimiter,
                                  OutputModerator outputModerator,
-                                 @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled) {
+                                 @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled,
+                                 AgentMetricsService agentMetrics) {
         this.agentRouter = agentRouter;
         this.rateLimiter = rateLimiter;
         this.outputModerator = outputModerator;
         this.guardrailEnabled = guardrailEnabled;
+        this.agentMetrics = agentMetrics;
     }
 
     // ── Request / Response types ───────────────────────────────────────────
@@ -131,10 +137,11 @@ public class RouteAdviceController {
         // MERN analogy: ['FREE','PREMIUM'].includes(header) ? header : 'FREE'
         UserTier tier = parseTier(tierHeader);
 
-        // Delegate routing + agent invocation to AgentRouter.
-        // The controller has no routing logic — it only reads the request and
-        // delegates.  This follows the thin-controller principle.
-        RouteAdviceResponse response = agentRouter.route(req.topic(), tier);
+        // Phase 9: wrap route() with agent-level timing.
+        // Both routing paths (SINGLE_STEP and FULL_PIPELINE) are captured in one timed() span.
+        RouteAdviceResponse response = agentMetrics.timed(
+                "AgentRouter", "route", userId, "(dynamic)",
+                () -> agentRouter.route(req.topic(), tier));
 
         // Phase 6: keyword-level output moderation as last line of defence.
         // OutputModerator checks the nested advice field.
