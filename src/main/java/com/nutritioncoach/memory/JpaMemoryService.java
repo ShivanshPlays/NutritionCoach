@@ -1,5 +1,6 @@
 package com.nutritioncoach.memory;
 
+import com.nutritioncoach.memory.NoteType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -115,7 +116,7 @@ public class JpaMemoryService implements MemoryService {
      */
     @Override
     @Transactional
-    public void saveNote(String userId, String noteType, String content) {
+    public void saveNote(String userId, NoteType noteType, String content) {
         if (content == null || content.isBlank()) return;
         if (noteRepo.existsByUserIdAndContent(userId, content)) {
             log.debug("JpaMemoryService.saveNote: duplicate note ignored for user={}", userId);

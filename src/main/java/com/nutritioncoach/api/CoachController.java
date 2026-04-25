@@ -4,8 +4,10 @@ import com.embabel.agent.api.invocation.AgentInvocation;
 import com.embabel.agent.core.AgentPlatform;
 import com.embabel.agent.domain.io.UserInput;
 import com.nutritioncoach.agent.CoachAgent;
+import com.nutritioncoach.agent.LoggerService;
 import com.nutritioncoach.guardrail.OutputModerator;
 import com.nutritioncoach.guardrail.RateLimiter;
+import com.nutritioncoach.memory.MemoryService;
 import com.nutritioncoach.model.CoachAdvice;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -83,14 +85,23 @@ public class CoachController {
     private final RateLimiter rateLimiter;
     private final boolean guardrailEnabled;
 
+    // Phase 8: LoggerService fires asynchronously after each advice response.
+    // MERN analogy: a background job triggered after res.json(advice).
+    private final LoggerService loggerService;
+    private final MemoryService memoryService;
+
     public CoachController(AgentPlatform agentPlatform,
                            OutputModerator outputModerator,
                            RateLimiter rateLimiter,
-                           @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled) {
+                           @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled,
+                           LoggerService loggerService,
+                           MemoryService memoryService) {
         this.agentPlatform = agentPlatform;
         this.outputModerator = outputModerator;
         this.rateLimiter = rateLimiter;
         this.guardrailEnabled = guardrailEnabled;
+        this.loggerService = loggerService;
+        this.memoryService = memoryService;
     }
 
     // -- POST /api/coach-advice ---------------------------------------------
@@ -137,6 +148,12 @@ public class CoachController {
         if (guardrailEnabled) {
             outputModerator.check(advice);
         }
+
+        // Phase 8: trigger LoggerAgent asynchronously after the response is built.
+        // @Async means this returns immediately; the logging runs in a background thread.
+        // The user sees the advice response without waiting for logging to complete.
+        // MERN analogy: setImmediate(() => loggerService.run(userId, messages))
+        loggerService.runAsync(userId, memoryService.getRecentMessages(userId, 8));
 
         return advice;
     }

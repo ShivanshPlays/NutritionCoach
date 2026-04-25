@@ -2,6 +2,7 @@ package com.nutritioncoach.memory;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import com.nutritioncoach.memory.NoteType;
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -43,9 +44,11 @@ public class AgentNote {
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
-    // Optional classifier: 'coaching', 'research', 'preference', etc.
+    // Closed vocabulary classifier — stored as VARCHAR via EnumType.STRING.
+    // MERN analogy: noteType: NoteType  (TypeScript union type discriminator)
+    @Enumerated(EnumType.STRING)
     @Column(name = "note_type", length = 32)
-    private String noteType;
+    private NoteType noteType;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
@@ -62,15 +65,15 @@ public class AgentNote {
 
     protected AgentNote() {}
 
-    public AgentNote(String userId, String noteType, String content) {
+    public AgentNote(String userId, NoteType noteType, String content) {
         this.userId = userId;
         this.noteType = noteType;
         this.content = content;
     }
 
-    public Long getId()        { return id; }
-    public String getUserId()  { return userId; }
-    public String getNoteType() { return noteType; }
+    public Long getId()          { return id; }
+    public String getUserId()    { return userId; }
+    public NoteType getNoteType() { return noteType; }
     public String getContent() { return content; }
     public Instant getCreatedAt() { return createdAt; }
 }

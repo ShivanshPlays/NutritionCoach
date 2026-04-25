@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import com.nutritioncoach.memory.NoteType;
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -68,7 +69,7 @@ public class InMemoryMemoryService implements MemoryService {
     }
 
     @Override
-    public void saveNote(String userId, String noteType, String content) {
+    public void saveNote(String userId, NoteType noteType, String content) {
         if (content == null || content.isBlank()) return;
         List<String> userNotes = notes.computeIfAbsent(userId, k -> new ArrayList<>());
         // Dedup: same as JpaMemoryService — silently skip exact duplicate content.

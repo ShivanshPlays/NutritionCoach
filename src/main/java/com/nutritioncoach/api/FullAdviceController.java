@@ -4,9 +4,11 @@ import com.embabel.agent.api.invocation.AgentInvocation;
 import com.embabel.agent.core.AgentPlatform;
 import com.embabel.agent.domain.io.UserInput;
 import com.nutritioncoach.agent.CoachAgent;
+import com.nutritioncoach.agent.LoggerService;
 import com.nutritioncoach.guardrail.OutputModerator;
 import com.nutritioncoach.guardrail.RateLimiter;
 import com.nutritioncoach.guardrail.UnsafeOutputException;
+import com.nutritioncoach.memory.MemoryService;
 import com.nutritioncoach.model.CoachAdvice;
 import com.nutritioncoach.model.CriticScore;
 import com.nutritioncoach.model.ResearchBrief;
@@ -109,14 +111,23 @@ public class FullAdviceController {
     private final RateLimiter rateLimiter;
     private final boolean guardrailEnabled;
 
+    // Phase 8: async logger triggered after each pipeline completion.
+    // MERN analogy: fire-and-forget background job after res.json(advice).
+    private final LoggerService loggerService;
+    private final MemoryService memoryService;
+
     public FullAdviceController(AgentPlatform agentPlatform,
                                 OutputModerator outputModerator,
                                 RateLimiter rateLimiter,
-                                @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled) {
+                                @Value("${app.guardrail.enabled:false}") boolean guardrailEnabled,
+                                LoggerService loggerService,
+                                MemoryService memoryService) {
         this.agentPlatform = agentPlatform;
         this.outputModerator = outputModerator;
         this.rateLimiter = rateLimiter;
         this.guardrailEnabled = guardrailEnabled;
+        this.loggerService = loggerService;
+        this.memoryService = memoryService;
     }
 
     // -- POST /api/full-advice -----------------------------------------------
@@ -190,6 +201,10 @@ public class FullAdviceController {
             // Final output moderation (keyword-level) as last line of defence.
             outputModerator.check(advice);
         }
+
+        // Phase 8: fire LoggerAgent in background after pipeline completes.
+        // MERN analogy: setImmediate(() => loggerService.run(userId, messages))
+        loggerService.runAsync(userId, memoryService.getRecentMessages(userId, 8));
 
         return advice;
     }

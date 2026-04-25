@@ -1,6 +1,7 @@
 package com.nutritioncoach.tool;
 
 import com.nutritioncoach.memory.MemoryService;
+import com.nutritioncoach.memory.NoteType;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -83,7 +84,7 @@ public class MemoryTool {
      * Next.js API route.
      */
     public void storeMemory(String userId, String note) {
-        memoryService.saveNote(userId, "coaching", note);
+        memoryService.saveNote(userId, NoteType.COACHING, note);
     }
 
     /**

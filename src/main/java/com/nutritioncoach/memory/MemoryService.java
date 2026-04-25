@@ -33,7 +33,7 @@ import java.util.List;
  *   interface Memory {
  *     saveMessage(userId, role, content): Promise<void>
  *     getRecentMessages(userId, n): Promise<Message[]>
- *     saveNote(userId, noteType, content): Promise<void>
+ *     saveNote(userId, noteType: NoteType, content): Promise<void>  // NoteType = 'COACHING'|'RESEARCH'|...
  *     findNotes(userId, query): Promise<string[]>
  *   }
  *
@@ -67,10 +67,10 @@ public interface MemoryService {
      * Persist a free-text agent note — idempotent (duplicates silently ignored).
      *
      * @param userId   the user this note belongs to
-     * @param noteType optional classifier ('coaching', 'research', etc.)
+     * @param noteType {@link NoteType} classifier for this note
      * @param content  the note text
      */
-    void saveNote(String userId, String noteType, String content);
+    void saveNote(String userId, NoteType noteType, String content);
 
     /**
      * Retrieve notes for a user matching a keyword query (case-insensitive substring).

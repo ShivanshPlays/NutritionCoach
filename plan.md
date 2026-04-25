@@ -293,14 +293,24 @@ Design decisions:
 
 ---
 
-### Phase 8 — LoggerAgent
+### Phase 8 — LoggerAgent ✅
 *Goal: dedicated agent for memory lifecycle management.*
 
-- [ ] Create `LoggerAgent` as an `@Agent` that:
-  - Summarises long conversation history into a compressed note
-  - Extracts user preferences from messages and updates `UserProfile`
-  - Tags and stores important facts as `agent_note` rows
-- [ ] Schedule it to run asynchronously after each conversation turn
+- [x] Create `LoggerAgent` as an `@Agent` that:
+  - Summarises conversation history into a compressed note (`compressedSummary`)
+  - Extracts user preferences (`extractedGoals`, `extractedRestrictions`) and updates `UserProfile`
+  - Tags and stores important facts as `agent_note` rows (`keyFacts`)
+- [x] Create `LoggerInput` and `LoggerSummary` domain records
+- [x] Create `LoggerService` (`@Service`) with `@Async runAsync()` — fire-and-forget after each advice call
+- [x] Enable async execution via `AsyncConfig` (`@EnableAsync`)
+- [x] Wire `LoggerService` into `CoachController` and `FullAdviceController`
+- [x] 5 unit tests in `LoggerAgentTest` — 82 total passing
+
+Design decisions:
+- `LoggerAgent` is pure LLM logic; `LoggerService` owns persistence (separation of concerns)
+- `@Async runAsync()` never blocks the HTTP response; failures are logged and swallowed
+- `UserProfile` updated only when non-empty strings are extracted (safe merge, not overwrite)
+- `AsyncConfig` uses Spring's default `SimpleAsyncTaskExecutor`; Phase 9 can replace with a named pool
 
 ---
 
